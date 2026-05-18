@@ -59,6 +59,21 @@ pointSizeSlider.addEventListener('input', () => {
     setPointSize(parseFloat(pointSizeSlider.value));
 });
 
+const yieldToMain = () => new Promise<void>(r => setTimeout(r, 0));
+
+async function triggerDownload(buffer: ArrayBuffer, mime: string, filename: string): Promise<void> {
+    await yieldToMain();
+    const blob = new Blob([buffer], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
 downloadBtn.addEventListener('click', async () => {
     if (!lastDownloadCaptureId || !lastDownloadPc) return;
     const btn = downloadBtn as HTMLButtonElement;
@@ -77,15 +92,7 @@ downloadBtn.addEventListener('click', async () => {
                 lastDownloadPc.size_bytes,
             );
         }
-        const blob = new Blob([buffer], {type: 'application/octet-stream'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `Capture_${lastDownloadCaptureId}_pointcloud.ply`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        await triggerDownload(buffer, 'application/octet-stream', `Capture_${lastDownloadCaptureId}_pointcloud.ply`);
     } catch (err) {
         showToast(`Download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
@@ -104,15 +111,7 @@ downloadColmapBtn.addEventListener('click', async () => {
         const buffer = await fetchColmapZip(lastDownloadCaptureId, (f) => {
             setProgress(dlProgressColmap, f);
         }, colmapSizeBytes);
-        const blob = new Blob([buffer], {type: 'application/zip'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `Capture_${lastDownloadCaptureId}_colmap.zip`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        await triggerDownload(buffer, 'application/zip', `Capture_${lastDownloadCaptureId}_colmap.zip`);
     } catch (err) {
         showToast(`COLMAP download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
@@ -131,15 +130,7 @@ downloadMeshBtn.addEventListener('click', async () => {
         const buffer = await fetchMeshGlb(lastDownloadCaptureId, (f) => {
             setProgress(dlProgressMesh, f);
         }, meshSizeBytes);
-        const blob = new Blob([buffer], {type: 'model/gltf-binary'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `Capture_${lastDownloadCaptureId}_mesh.glb`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        await triggerDownload(buffer, 'model/gltf-binary', `Capture_${lastDownloadCaptureId}_mesh.glb`);
     } catch (err) {
         showToast(`Mesh download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
