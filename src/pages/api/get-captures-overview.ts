@@ -1,5 +1,7 @@
 import type {APIRoute} from 'astro';
 import {getApiUrl} from '../../lib/endpoint-config';
+import {createSupabaseServerClientFromRequest} from '../../lib/supabase-server';
+import {listUserCaptures, requireUser, unauthorizedResponse} from '../../lib/capture-permissions';
 
 interface CaptureListItem {
     id: string;
@@ -32,10 +34,8 @@ interface MeshInfo {
 interface CaptureOverviewEntry extends CaptureListItem {
     pointclouds_info: PointCloudsResponse | null;
     mesh_info: MeshInfo;
+    role: string;
 }
-
-const CACHE_TTL_MS = 5_000;
-let cache: { ts: number; payload: { captures: CaptureOverviewEntry[] } } | null = null;
 
 const FANOUT_CONCURRENCY = 16;
 
@@ -68,19 +68,16 @@ export const GET: APIRoute = async ({request}) => {
         });
     }
 
-    const url = new URL(request.url);
-    const noCache = url.searchParams.get('refresh') === '1';
+    const responseHeaders = new Headers({'Content-Type': 'application/json', 'Cache-Control': 'no-store'});
+    const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
+    const user = await requireUser(supabase);
+    if (!user) return unauthorizedResponse();
 
-    if (!noCache && cache && Date.now() - cache.ts < CACHE_TTL_MS) {
-        return new Response(JSON.stringify(cache.payload), {
-            status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Cache': 'HIT',
-                'Cache-Control': 'no-store',
-            },
-        });
+    const allowedEntries = await listUserCaptures(supabase);
+    if (allowedEntries.length === 0) {
+        return new Response(JSON.stringify({captures: []}), {status: 200, headers: responseHeaders});
     }
+    const allowedMap = new Map(allowedEntries.map(e => [e.capture_id.toLowerCase(), e.role]));
 
     try {
         const listRes = await fetch(`${baseUrl}/captures`, {
@@ -100,10 +97,11 @@ export const GET: APIRoute = async ({request}) => {
         }
 
         const listData = await listRes.json() as { captures: CaptureListItem[] };
-        const captures = listData.captures ?? [];
+        const captures = (listData.captures ?? []).filter(c => allowedMap.has(c.id.toLowerCase()));
 
         const enriched = await mapWithConcurrency(captures, FANOUT_CONCURRENCY, async (c) => {
             const id = encodeURIComponent(c.id);
+            const role = allowedMap.get(c.id.toLowerCase()) ?? 'collaborator';
 
             const pointcloudsP = (async (): Promise<PointCloudsResponse | null> => {
                 try {
@@ -154,19 +152,12 @@ export const GET: APIRoute = async ({request}) => {
             })();
 
             const [pointclouds_info, mesh_info] = await Promise.all([pointcloudsP, meshP]);
-            return {...c, pointclouds_info, mesh_info} satisfies CaptureOverviewEntry;
+            return {...c, pointclouds_info, mesh_info, role} satisfies CaptureOverviewEntry;
         });
 
-        const payload = {captures: enriched};
-        cache = {ts: Date.now(), payload};
-
-        return new Response(JSON.stringify(payload), {
+        return new Response(JSON.stringify({captures: enriched}), {
             status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Cache': 'MISS',
-                'Cache-Control': 'no-store',
-            },
+            headers: responseHeaders,
         });
 
     } catch (error) {
@@ -179,3 +170,4 @@ export const GET: APIRoute = async ({request}) => {
         });
     }
 };
+

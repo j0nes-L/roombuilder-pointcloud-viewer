@@ -10,6 +10,8 @@ import {
     getCachedMeshInfo,
     resolvePointCloud
 } from '../lib/snapspace-client';
+import {getSupabaseBrowserClient} from '../lib/supabase-browser';
+import {showToast} from './toast';
 import {
     getPointCount,
     initViewer,
@@ -20,7 +22,6 @@ import {
 
 const sessionList = document.getElementById('session-list')!;
 const viewerContainer = document.getElementById('viewer')!;
-const statusEl = document.getElementById('status')!;
 const refreshBtn = document.getElementById('refresh-btn')!;
 const sidebarEl = document.getElementById('sidebar')!;
 const toggleBtn = document.getElementById('sidebar-toggle')!;
@@ -36,6 +37,11 @@ const itemDownloadsSection = document.getElementById('item-downloads-section')!;
 const dlSlotPly = document.getElementById('dl-slot-ply')!;
 const dlSlotColmap = document.getElementById('dl-slot-colmap')!;
 const dlSlotMesh = document.getElementById('dl-slot-mesh')!;
+const dlSlotShare = document.getElementById('dl-slot-share')!;
+const shareBtn = document.getElementById('share-btn')!;
+const dlProgressPly = document.getElementById('dl-progress-ply')!;
+const dlProgressColmap = document.getElementById('dl-progress-colmap')!;
+const dlProgressMesh = document.getElementById('dl-progress-mesh')!;
 
 const pointCloudCache = new Map<string, ArrayBuffer>();
 
@@ -56,18 +62,18 @@ pointSizeSlider.addEventListener('input', () => {
 downloadBtn.addEventListener('click', async () => {
     if (!lastDownloadCaptureId || !lastDownloadPc) return;
     const btn = downloadBtn as HTMLButtonElement;
-    btn.disabled = true;
     const origText = btn.textContent;
+    setDownloadBusy(true);
     try {
         let buffer: ArrayBuffer;
         if (prefetchedDownloadBuffer) {
             buffer = prefetchedDownloadBuffer;
         } else {
-            btn.textContent = 'Downloading…';
+            setProgress(dlProgressPly, 0);
             buffer = await fetchPointCloudData(
                 lastDownloadCaptureId,
                 lastDownloadPc.filename,
-                (f) => { btn.textContent = `Downloading… ${Math.round(f * 100)}%`; },
+                (f) => { setProgress(dlProgressPly, f); },
                 lastDownloadPc.size_bytes,
             );
         }
@@ -81,9 +87,9 @@ downloadBtn.addEventListener('click', async () => {
         a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
     } catch (err) {
-        setStatus(`Download error: ${err instanceof Error ? err.message : err}`);
+        showToast(`Download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
-        btn.disabled = false;
+        setDownloadBusy(false);
         btn.textContent = origText;
     }
 });
@@ -91,12 +97,12 @@ downloadBtn.addEventListener('click', async () => {
 downloadColmapBtn.addEventListener('click', async () => {
     if (!lastDownloadCaptureId || !colmapAvailable) return;
     const btn = downloadColmapBtn as HTMLButtonElement;
-    btn.disabled = true;
     const origText = btn.textContent;
+    setDownloadBusy(true);
     try {
-        btn.textContent = 'Downloading… 0%';
+        setProgress(dlProgressColmap, 0);
         const buffer = await fetchColmapZip(lastDownloadCaptureId, (f) => {
-            btn.textContent = `Downloading… ${Math.round(f * 100)}%`;
+            setProgress(dlProgressColmap, f);
         }, colmapSizeBytes);
         const blob = new Blob([buffer], {type: 'application/zip'});
         const url = URL.createObjectURL(blob);
@@ -108,9 +114,9 @@ downloadColmapBtn.addEventListener('click', async () => {
         a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
     } catch (err) {
-        setStatus(`COLMAP download error: ${err instanceof Error ? err.message : err}`);
+        showToast(`COLMAP download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
-        btn.disabled = false;
+        setDownloadBusy(false);
         btn.textContent = origText;
     }
 });
@@ -118,12 +124,12 @@ downloadColmapBtn.addEventListener('click', async () => {
 downloadMeshBtn.addEventListener('click', async () => {
     if (!lastDownloadCaptureId || !meshAvailable) return;
     const btn = downloadMeshBtn as HTMLButtonElement;
-    btn.disabled = true;
     const origText = btn.textContent;
+    setDownloadBusy(true);
     try {
-        btn.textContent = 'Downloading… 0%';
+        setProgress(dlProgressMesh, 0);
         const buffer = await fetchMeshGlb(lastDownloadCaptureId, (f) => {
-            btn.textContent = `Downloading… ${Math.round(f * 100)}%`;
+            setProgress(dlProgressMesh, f);
         }, meshSizeBytes);
         const blob = new Blob([buffer], {type: 'model/gltf-binary'});
         const url = URL.createObjectURL(blob);
@@ -135,18 +141,61 @@ downloadMeshBtn.addEventListener('click', async () => {
         a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
     } catch (err) {
-        setStatus(`Mesh download error: ${err instanceof Error ? err.message : err}`);
+        showToast(`Mesh download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
-        btn.disabled = false;
+        setDownloadBusy(false);
         btn.textContent = origText;
     }
 });
 
 const SPINNER = '<div class="spinner"></div>';
 
+shareBtn.addEventListener('click', async () => {
+    if (!lastDownloadCaptureId) return;
+    if (!isLoggedIn) {
+        showToast('Please log in to share captures.', 'error');
+        return;
+    }
+    const btn = shareBtn as HTMLButtonElement;
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Creating link…';
+    try {
+        const supabase = getSupabaseBrowserClient();
+        const {data: {session}} = await supabase.auth.getSession();
+        if (!session) {
+            showToast('Session expired. Please log in again.', 'error');
+            return;
+        }
+        const {data, error} = await supabase
+            .from('capture_share_tokens')
+            .insert({capture_id: lastDownloadCaptureId, created_by: session.user.id})
+            .select('token')
+            .single();
+        if (error || !data?.token) {
+            throw new Error(error?.message ?? 'Could not create share token.');
+        }
+        const shareUrl = `${window.location.origin}/?token=${data.token}`;
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            showToast('Share link copied to clipboard.', 'success');
+        } catch {
+            showToast(shareUrl, 'info', 10000);
+        }
+    } catch (err) {
+        showToast(`Share failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+    }
+});
+
+
 let viewerInitialised = false;
 let selectedPcKey: string | null = null;
-let isLoggedIn = false;
+const __ssLoggedIn = (window as unknown as {__SS_LOGGED_IN__?: boolean}).__SS_LOGGED_IN__;
+const ssrValueAvailable = typeof __ssLoggedIn === 'boolean';
+let isLoggedIn = ssrValueAvailable ? __ssLoggedIn! : false;
 let activeListItemEl: HTMLButtonElement | null = null;
 
 toggleBtn.addEventListener('click', () => {
@@ -168,11 +217,69 @@ async function checkSession(): Promise<void> {
             isLoggedIn = !!data.loggedIn;
         }
     } catch {
-        isLoggedIn = false;
+        /* keep SSR-seeded value */
     }
 }
 
-await checkSession();
+// If the SSR value was available, start loading immediately and verify the session in the background.
+// Only block on checkSession() when there was no SSR value to seed from.
+if (ssrValueAvailable) {
+    checkSession().then(() => { /* background refresh — no reload needed */ });
+} else {
+    await checkSession();
+}
+
+async function processShareToken(): Promise<void> {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (!token) return;
+
+    params.delete('token');
+    history.replaceState(
+        {},
+        '',
+        window.location.pathname + (params.toString() ? '?' + params.toString() : ''),
+    );
+
+    if (!/^[0-9a-fA-F-]{36}$/.test(token)) {
+        showToast('Invalid share link.', 'error');
+        return;
+    }
+
+    if (!isLoggedIn) {
+        const next = encodeURIComponent(`${window.location.pathname}?token=${token}`);
+        showToast('Please log in to claim this shared capture.', 'info', 6000);
+        setTimeout(() => {
+            window.location.href = `/account?next=${next}`;
+        }, 2500);
+        return;
+    }
+
+    try {
+        const supabase = getSupabaseBrowserClient();
+        const {data: claimedId, error} = await supabase.rpc('claim_capture_share', {p_token: token});
+        if (error) {
+            const message = /expired/i.test(error.message)
+                ? 'This share link has expired.'
+                : /not found/i.test(error.message)
+                    ? 'This share link is invalid.'
+                    : 'Could not claim share link.';
+            showToast(message, 'error');
+            return;
+        }
+        if (claimedId === null) {
+            showToast('You already have access to this capture.', 'info');
+            return;
+        }
+        showToast('Capture added to your library.', 'success');
+        clearPointCloudsCache();
+        loadSessions();
+    } catch (err) {
+        showToast(`Claim failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+}
+
+await processShareToken();
 
 if (window.innerWidth <= 768) {
     sidebarEl.classList.add('collapsed');
@@ -190,6 +297,11 @@ async function loadSessions(): Promise<void> {
     dlSlotPly.classList.remove('open');
     dlSlotColmap.classList.remove('open');
     dlSlotMesh.classList.remove('open');
+    dlSlotShare.classList.remove('open');
+    if (!isLoggedIn) {
+        sessionList.innerHTML = '<div class="empty-state"><a href="/account" class="footer-link">Login to view captures</a></div>';
+        return;
+    }
     sessionList.innerHTML = SPINNER;
     setStatus('');
     try {
@@ -208,7 +320,7 @@ async function loadSessions(): Promise<void> {
             if (!entry.pointclouds_info) { el.remove(); return; }
             const resolved = resolvePointCloud(entry.pointclouds_info);
             if (!resolved) { el.remove(); return; }
-            upgradeSkeletonItem(el, entry.id, resolved);
+            upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator');
             rendered++;
             const pcKey = `${entry.id}/${resolved.view.filename}`;
             if (selectedPcKey === pcKey) {
@@ -259,13 +371,14 @@ function renderSkeletonItem(captureId: string): HTMLButtonElement {
     return el;
 }
 
-function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud): void {
+function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string): void {
     el.classList.remove('is-skeleton');
     el.disabled = false;
     const sizeMB = (resolved.view.size_bytes / (1024 * 1024)).toFixed(1);
     const isCached = pointCloudCache.has(`${captureId}/${resolved.view.filename}`);
+    const deleteTitle = role === 'owner' ? 'Delete Capture' : 'Remove from library';
     const deleteBtn = isLoggedIn
-        ? `<button class="item-delete-inline" title="Delete Capture" data-capture-id="${captureId}">${SVG_TRASH}</button>`
+        ? `<button class="item-delete-inline" title="${deleteTitle}" data-capture-id="${captureId}" data-role="${role}">${SVG_TRASH}</button>`
         : '';
     el.innerHTML = `
     <div class="item-content">
@@ -275,10 +388,10 @@ function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved:
     ${deleteBtn}
     <span class="item-status-icon${isCached ? ' cached' : ''}" title="${isCached ? 'Cached locally' : 'Not cached'}">${isCached ? SVG_CACHED : SVG_CLOUD}</span>
   `;
-    attachItemHandlers(el, captureId, resolved);
+    attachItemHandlers(el, captureId, resolved, role);
 }
 
-function attachItemHandlers(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud): void {
+function attachItemHandlers(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string): void {
     el.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).closest('.item-delete-inline')) return;
         selectPointCloud(captureId, resolved, el);
@@ -288,13 +401,16 @@ function attachItemHandlers(el: HTMLButtonElement, captureId: string, resolved: 
     if (delBtn) {
         delBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            await performDeleteCapture(captureId, resolved.view.filename, el);
+            await performDeleteCapture(captureId, resolved.view.filename, el, role);
         });
     }
 }
 
-async function performDeleteCapture(captureId: string, viewFilename: string, listItemEl: HTMLButtonElement): Promise<void> {
-    if (!confirm(`Delete Capture "${captureId}"?`)) return;
+async function performDeleteCapture(captureId: string, viewFilename: string, listItemEl: HTMLButtonElement, role: string): Promise<void> {
+    const confirmMsg = role === 'owner'
+        ? `Delete Capture "${captureId}" permanently?`
+        : `Remove "${captureId}" from your library?`;
+    if (!confirm(confirmMsg)) return;
     try {
         await deleteCapture(captureId);
         const pcKey = `${captureId}/${viewFilename}`;
@@ -313,6 +429,7 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
         dlSlotPly.classList.remove('open');
         dlSlotColmap.classList.remove('open');
         dlSlotMesh.classList.remove('open');
+        dlSlotShare.classList.remove('open');
         document.getElementById('dl-slot-delete')?.classList.remove('open');
         listItemEl.remove();
         if (activeListItemEl === listItemEl) activeListItemEl = null;
@@ -320,7 +437,7 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
             sessionList.innerHTML = '<div class="empty-state">No point clouds available.</div>';
         }
     } catch (err) {
-        setStatus(`Delete error: ${err instanceof Error ? err.message : err}`);
+        showToast(`Delete failed: ${err instanceof Error ? err.message : err}`, 'error');
     }
 }
 
@@ -349,10 +466,16 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
     dlSlotPly.classList.remove('open');
     dlSlotColmap.classList.remove('open');
     dlSlotMesh.classList.remove('open');
+    dlSlotShare.classList.remove('open');
 
     viewerEmpty.classList.add('hidden');
     viewerProgress.textContent = '0 %';
     viewerLoading.classList.remove('hidden');
+
+    // Buttons sofort aufklappen, noch vor dem Laden (aber ausgegraut)
+    await updateDownloadButtons(captureId, resolved);
+    setDownloadBusy(true);
+
     try {
         let buffer: ArrayBuffer;
         const cacheKey = `${captureId}/${pc.filename}`;
@@ -382,7 +505,6 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         prefetchedDownloadBuffer = buffer;
         pointSizeControl.classList.remove('hidden');
 
-        await updateDownloadButtons(captureId, resolved);
 
         const count = getPointCount();
         const countStr = count >= 1_000_000
@@ -410,11 +532,31 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         setStatus(`Error: ${err instanceof Error ? err.message : err}`);
     } finally {
         viewerLoading.classList.add('hidden');
+        setDownloadBusy(false);
     }
 }
 
-function setStatus(msg: string): void {
-    statusEl.textContent = msg;
+function setStatus(_msg: string): void {}
+
+function setDownloadBusy(busy: boolean): void {
+    (downloadBtn as HTMLButtonElement).disabled = busy;
+    (downloadColmapBtn as HTMLButtonElement).disabled = busy;
+    (downloadMeshBtn as HTMLButtonElement).disabled = busy;
+    if (!busy) {
+        setProgress(dlProgressPly, null);
+        setProgress(dlProgressColmap, null);
+        setProgress(dlProgressMesh, null);
+    }
+}
+
+function setProgress(bar: HTMLElement, fraction: number | null): void {
+    if (fraction === null) {
+        bar.classList.remove('active');
+        (bar.querySelector('.dl-progress-fill') as HTMLElement).style.width = '0%';
+    } else {
+        bar.classList.add('active');
+        (bar.querySelector('.dl-progress-fill') as HTMLElement).style.width = `${Math.round(fraction * 100)}%`;
+    }
 }
 
 async function updateDownloadButtons(captureId: string, resolved: ResolvedPointCloud): Promise<void> {
@@ -437,6 +579,12 @@ async function updateDownloadButtons(captureId: string, resolved: ResolvedPointC
     const dlSizeMB = (resolved.download.size_bytes / (1024 * 1024)).toFixed(0);
     (downloadBtn as HTMLButtonElement).textContent = `⤓ .ply (${dlSizeMB} MB)`;
     dlSlotPly.classList.add('open');
+
+    if (isLoggedIn) {
+        dlSlotShare.classList.add('open');
+    } else {
+        dlSlotShare.classList.remove('open');
+    }
 
     colmapAvailable = resolved.colmap_available;
     colmapSizeBytes = resolved.colmap_size_bytes;

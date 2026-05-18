@@ -152,6 +152,7 @@ export async function deleteCapture(captureId: string): Promise<void> {
 export interface CaptureOverviewEntry extends CaptureListItem {
     pointclouds_info: PointCloudsResponse | null;
     mesh_info: { available: boolean; size_bytes: number | null };
+    role: string;
 }
 
 export async function fetchCapturesOverview(forceRefresh = false): Promise<CaptureOverviewEntry[]> {

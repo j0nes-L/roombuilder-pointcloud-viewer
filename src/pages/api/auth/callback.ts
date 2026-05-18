@@ -29,8 +29,7 @@ export const GET: APIRoute = async ({request}) => {
             ? 'This link has expired or is invalid. Please request a new one.'
             : error.message;
         return buildRedirect(
-            `/account?toast=error&msg=${encodeURIComponent(msg)}`,
-            responseHeaders
+            `/account?toast=error&msg=${encodeURIComponent(msg)}`
         );
     }
 
@@ -41,9 +40,9 @@ export const GET: APIRoute = async ({request}) => {
         );
     }
 
+    await supabase.auth.signOut({scope: 'local'});
+
     return buildRedirect(
-        `/account?toast=success&msg=${encodeURIComponent('Email confirmed! You are now logged in.')}`,
-        responseHeaders
+        `/account?toast=success&msg=${encodeURIComponent('Email confirmed! You can now log in.')}`
     );
 };
-

@@ -1,6 +1,7 @@
 import type {APIRoute} from 'astro';
 import {getApiUrl} from '../../../lib/endpoint-config';
 import {createSupabaseServerClientFromRequest} from '../../../lib/supabase-server';
+import {getUserCaptureRole, isValidCaptureId} from '../../../lib/capture-permissions';
 
 export const DELETE: APIRoute = async ({request}) => {
     const responseHeaders = new Headers({'Content-Type': 'application/json'});
@@ -8,11 +9,43 @@ export const DELETE: APIRoute = async ({request}) => {
 
     const {data: {user}} = await supabase.auth.getUser();
     if (!user) {
-        responseHeaders.set('Content-Type', 'application/json');
         return new Response(JSON.stringify({error: 'Unauthorized. Please log in.'}), {
             status: 401,
             headers: responseHeaders,
         });
+    }
+
+    const url = new URL(request.url);
+    const captureId = url.searchParams.get('capture_id');
+
+    if (!captureId || !isValidCaptureId(captureId)) {
+        return new Response(JSON.stringify({error: 'Invalid or missing capture_id.'}), {
+            status: 400,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+
+    const role = await getUserCaptureRole(supabase, captureId);
+    if (!role) {
+        return new Response(JSON.stringify({error: 'You do not have access to this capture.'}), {
+            status: 403,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+
+    if (role === 'collaborator') {
+        const {error} = await supabase
+            .from('capture_permissions')
+            .delete()
+            .eq('capture_id', captureId)
+            .eq('user_id', user.id);
+        if (error) {
+            return new Response(JSON.stringify({error: 'Failed to remove capture from library.'}), {
+                status: 500,
+                headers: {'Content-Type': 'application/json'},
+            });
+        }
+        return new Response(JSON.stringify({ok: true}), {status: 200, headers: responseHeaders});
     }
 
     const apiKey = import.meta.env.SNAPSPACE_API_KEY;
@@ -25,29 +58,10 @@ export const DELETE: APIRoute = async ({request}) => {
         });
     }
 
-    const url = new URL(request.url);
-    const captureId = url.searchParams.get('capture_id');
-
-    if (!captureId) {
-        return new Response(JSON.stringify({error: 'Missing capture_id parameter.'}), {
-            status: 400,
-            headers: {'Content-Type': 'application/json'},
-        });
-    }
-
-    if (!/^[A-Za-z0-9_-]+$/.test(captureId)) {
-        return new Response(JSON.stringify({error: 'Invalid capture_id format.'}), {
-            status: 400,
-            headers: {'Content-Type': 'application/json'},
-        });
-    }
-
     try {
         const response = await fetch(`${baseUrl}/captures/${encodeURIComponent(captureId)}`, {
             method: 'DELETE',
-            headers: {
-                'X-API-Key': apiKey,
-            },
+            headers: {'X-API-Key': apiKey},
         });
 
         if (!response.ok) {
@@ -62,12 +76,13 @@ export const DELETE: APIRoute = async ({request}) => {
             });
         }
 
+        await supabase
+            .from('capture_permissions')
+            .delete()
+            .eq('capture_id', captureId);
+
         const data = await response.json();
-        responseHeaders.set('Content-Type', 'application/json');
-        return new Response(JSON.stringify(data), {
-            status: 200,
-            headers: responseHeaders,
-        });
+        return new Response(JSON.stringify(data), {status: 200, headers: responseHeaders});
 
     } catch (error) {
         return new Response(JSON.stringify({

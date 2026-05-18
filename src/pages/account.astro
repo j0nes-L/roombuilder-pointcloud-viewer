@@ -345,7 +345,13 @@ loginForm?.addEventListener('submit', async (e) => {
                 showToast(msg, 'error');
             }
         } else {
-            window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Welcome back, ${data.display_name ?? email}!`);
+            const nextParam = new URLSearchParams(window.location.search).get('next');
+            const safeNext = nextParam && /^\/[A-Za-z0-9_\-\/?=&.%]*$/.test(nextParam) ? nextParam : null;
+            if (safeNext) {
+                window.location.href = safeNext;
+            } else {
+                window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Welcome back, ${data.display_name ?? email}!`);
+            }
         }
     } catch {
         setError(loginError, 'Network error. Please try again.');

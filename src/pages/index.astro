@@ -68,7 +68,6 @@ if (user) {
                 <div class="spinner-large"></div>
                 <div id="viewer-progress" class="viewer-progress">0 %</div>
             </div>
-            <div id="status" class="viewer-status"></div>
         </div>
     </div>
     <footer class="app-footer">
@@ -85,21 +84,38 @@ if (user) {
         <div class="dl-slot" id="dl-slot-ply">
             <div class="dl-slot-inner">
                 <button id="download-btn" class="btn btn-download">⤓ .ply</button>
+                <div class="dl-progress" id="dl-progress-ply"><div class="dl-progress-fill"></div></div>
             </div>
         </div>
         <div class="dl-slot" id="dl-slot-colmap">
             <div class="dl-slot-inner">
                 <button id="download-colmap-btn" class="btn btn-download">⤓ COLMAP</button>
+                <div class="dl-progress" id="dl-progress-colmap"><div class="dl-progress-fill"></div></div>
             </div>
         </div>
         <div class="dl-slot" id="dl-slot-mesh">
             <div class="dl-slot-inner">
                 <button id="download-mesh-btn" class="btn btn-download">⤓ .glb</button>
+                <div class="dl-progress" id="dl-progress-mesh"><div class="dl-progress-fill"></div></div>
+            </div>
+        </div>
+        <div class="dl-slot" id="dl-slot-share">
+            <div class="dl-slot-inner">
+                <button id="share-btn" class="btn btn-download btn-accent">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                    </svg>
+                    Share link
+                </button>
             </div>
         </div>
     </div>
 </div>
 
+<script is:inline define:vars={{loggedIn: !!user}}>
+    window.__SS_LOGGED_IN__ = loggedIn;
+</script>
 <script src="../scripts/toast.ts"></script>
 <script src="../scripts/app.ts"></script>
 </body>
