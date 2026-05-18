@@ -1,5 +1,6 @@
 import type {APIRoute} from 'astro';
 import {createSupabaseServerClientFromRequest} from '../../../lib/supabase-server';
+import {getOrigin} from '../../../lib/get-origin';
 
 export const POST: APIRoute = async ({request}) => {
     const responseHeaders = new Headers({'Content-Type': 'application/json'});
@@ -28,7 +29,7 @@ export const POST: APIRoute = async ({request}) => {
         password,
         options: {
             data: {display_name: display_name.trim()},
-            emailRedirectTo: `${new URL(request.url).origin}/api/auth/callback?flow=signup`,
+            emailRedirectTo: `${getOrigin(request)}/api/auth/callback?flow=signup`,
         },
     });
 
