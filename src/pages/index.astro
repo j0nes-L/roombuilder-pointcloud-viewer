@@ -15,7 +15,6 @@ if (user) {
         .select('display_name')
         .eq('id', user.id)
         .single();
-    // Fallback: read from auth metadata if profiles row has no display_name yet
     displayName = data?.display_name
         ?? (user.user_metadata?.display_name as string | undefined)
         ?? null;
@@ -96,14 +95,6 @@ if (user) {
         <div class="dl-slot" id="dl-slot-mesh">
             <div class="dl-slot-inner">
                 <button id="download-mesh-btn" class="btn btn-download">⤓ .glb</button>
-            </div>
-        </div>
-        <div class="dl-slot" id="dl-slot-delete">
-            <div class="dl-slot-inner" style="padding-top:4px">
-                <button id="item-delete-btn" class="btn btn-download btn-download-danger">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;flex-shrink:0"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                    Delete Capture
-                </button>
             </div>
         </div>
     </div>

@@ -4,7 +4,7 @@ import {createSupabaseServerClientFromRequest} from '../../../lib/supabase-serve
 export const GET: APIRoute = async ({request}) => {
     const url = new URL(request.url);
     const code = url.searchParams.get('code');
-    const flow = url.searchParams.get('flow') ?? 'signup'; // 'signup' | 'recovery'
+    const flow = url.searchParams.get('flow') ?? 'signup';
 
     const buildRedirect = (location: string, extraHeaders?: Headers) => {
         const headers = new Headers(extraHeaders);

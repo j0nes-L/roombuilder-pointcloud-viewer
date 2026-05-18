@@ -6,7 +6,6 @@ const supabase = createSupabaseServerClient(
     Astro.cookies,
     Astro.request.headers.get('Cookie') ?? ''
 );
-// getUser() contacts the Supabase Auth server – secure, not just cookie-based
 const {data: {user}} = await supabase.auth.getUser();
 
 let profile: {role: string | null; display_name: string | null} | null = null;
@@ -16,15 +15,13 @@ if (user) {
         .select('role, display_name')
         .eq('id', user.id)
         .single();
-    // Fallback: read display_name from auth metadata if profiles is missing it
     profile = data ? {
         role: data.role,
         display_name: data.display_name ?? (user.user_metadata?.display_name as string | undefined) ?? null,
     } : null;
 }
 
-const mode = Astro.url.searchParams.get('mode'); // 'update-password'
-const updatePasswordMode = !!user && mode === 'update-password';
+const mode = Astro.url.searchParams.get('mode');
 ---
 <!DOCTYPE html>
 <html lang="de">
@@ -49,7 +46,12 @@ const updatePasswordMode = !!user && mode === 'update-password';
                 <div class="account-info">
                     <div class="account-field">
                         <span class="account-field-label">Display Name</span>
-                        <span class="account-field-value">{profile?.display_name ?? '—'}</span>
+                        <span class="account-field-value account-field-value--name">
+                            {profile?.display_name ?? '—'}
+                            <button type="button" id="open-change-name-btn" class="btn btn-icon account-edit-name-btn" title="Change Display Name" aria-label="Change Display Name">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                        </span>
                     </div>
                     <div class="account-field">
                         <span class="account-field-label">Email</span>
@@ -67,14 +69,14 @@ const updatePasswordMode = !!user && mode === 'update-password';
                 </div>
 
                 <div class="account-actions">
-                    <button type="button" id="logout-btn" class="btn btn-secondary account-action-btn" data-display-name={profile?.display_name ?? user.email ?? ''}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                        Logout
-                    </button>
-
                     <button type="button" id="open-change-pw-btn" class="btn btn-secondary account-action-btn">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         Change Password
+                    </button>
+
+                    <button type="button" id="logout-btn" class="btn btn-secondary account-action-btn" data-display-name={profile?.display_name ?? user.email ?? ''}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Logout
                     </button>
                 </div>
             </div>
@@ -198,13 +200,36 @@ const updatePasswordMode = !!user && mode === 'update-password';
     </div>
 </div>
 
+<!-- ── Change Display Name Modal ──────────────────────────────────────────── -->
+<div id="change-name-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span class="modal-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Change Display Name
+            </span>
+            <button type="button" id="close-change-name-modal" class="btn btn-icon" aria-label="Close" style="width:28px;height:28px;color:var(--text-muted);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:18px;">Choose a new display name shown to others.</p>
+        <form id="change-name-form" novalidate>
+            <div class="form-group">
+                <label class="login-label" for="cn-new-name">New Display Name</label>
+                <input id="cn-new-name" type="text" class="login-input" placeholder="Your name" autocomplete="name" required/>
+            </div>
+            <div id="cn-error" class="login-error hidden"></div>
+            <div class="modal-actions" style="gap:8px;">
+                <button type="button" id="cn-cancel-btn" class="btn btn-secondary" style="height:36px;padding:0 16px;">Cancel</button>
+                <button type="submit" id="cn-submit-btn" class="btn btn-accent" style="height:36px;padding:0 20px;" disabled>Update Name</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 import {showToast, initToastFromUrl} from '../scripts/toast';
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-function val(id: string): string {
-    return (document.getElementById(id) as HTMLInputElement | null)?.value.trim() ?? '';
-}
 function setError(el: HTMLElement | null, msg: string) {
     if (!el) return;
     el.textContent = msg;
@@ -228,10 +253,8 @@ function markMatch(id: string, ok: boolean) {
     el.classList.toggle('input-match', ok);
 }
 
-// ── Init toast from URL params ────────────────────────────────────────────
 initToastFromUrl();
 
-// ── Tab switching ─────────────────────────────────────────────────────────
 const tabLogin = document.getElementById('tab-login');
 const tabRegister = document.getElementById('tab-register');
 const panelLogin = document.getElementById('panel-login');
@@ -252,11 +275,10 @@ function switchToRegister() {
 tabLogin?.addEventListener('click', switchToLogin);
 tabRegister?.addEventListener('click', switchToRegister);
 
-// ── Registration redirect countdown ──────────────────────────────────────
 let regRedirectTimer: ReturnType<typeof setInterval> | null = null;
 let regRedirectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-function startRegRedirect(displayName: string) {
+function startRegRedirect() {
     let s = 5;
     const countdownEl = document.getElementById('reg-countdown');
     if (countdownEl) countdownEl.textContent = String(s);
@@ -268,7 +290,7 @@ function startRegRedirect(displayName: string) {
 
     regRedirectTimeout = setTimeout(() => {
         if (regRedirectTimer) clearInterval(regRedirectTimer);
-        window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Account created! Welcome, ${displayName}!`);
+        window.location.href = '/?toast=info&msg=' + encodeURIComponent('Mail confirmation pending… Please check your inbox!');
     }, 5000);
 }
 
@@ -277,10 +299,8 @@ function cancelRegRedirect() {
     if (regRedirectTimeout) { clearTimeout(regRedirectTimeout); regRedirectTimeout = null; }
 }
 
-// Cancel redirect when user switches to Login tab
 tabLogin?.addEventListener('click', cancelRegRedirect);
 
-// ── Login form ────────────────────────────────────────────────────────────
 const loginForm = document.getElementById('login-form') as HTMLFormElement | null;
 const loginError = document.getElementById('login-error');
 const loginBtn = document.getElementById('login-btn') as HTMLButtonElement | null;
@@ -335,11 +355,9 @@ loginForm?.addEventListener('submit', async (e) => {
     }
 });
 
-// ── Register form ─────────────────────────────────────────────────────────
 const registerForm = document.getElementById('register-form') as HTMLFormElement | null;
 const registerError = document.getElementById('register-error');
 const registerBtn = document.getElementById('register-btn') as HTMLButtonElement | null;
-const registerSuccess = document.getElementById('register-success');
 const regEmailEl = document.getElementById('reg-email') as HTMLInputElement | null;
 const regNameEl = document.getElementById('reg-display-name') as HTMLInputElement | null;
 const regPasswordEl = document.getElementById('reg-password') as HTMLInputElement | null;
@@ -388,6 +406,7 @@ registerForm?.addEventListener('submit', async (e) => {
             const msg = data.error ?? 'Registration failed.';
             setError(registerError, msg);
             if (/email.*already|already.*registered/i.test(msg)) markField('reg-email', true);
+            if (/display name.*taken|taken.*display name/i.test(msg)) markField('reg-display-name', true);
             showToast(msg, 'error');
         } else if (data.needsConfirmation) {
             registerForm.classList.add('hidden');
@@ -395,8 +414,7 @@ registerForm?.addEventListener('submit', async (e) => {
             const successText = document.getElementById('register-success-text');
             if (successText) successText.textContent = `Account created for ${data.display_name ?? email}!`;
             successEl?.classList.remove('hidden');
-            startRegRedirect(data.display_name ?? email);
-            // no toast — inline message is the feedback
+            startRegRedirect();
         } else {
             window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Account created! Welcome, ${data.display_name ?? email}!`);
         }
@@ -408,7 +426,6 @@ registerForm?.addEventListener('submit', async (e) => {
     }
 });
 
-// ── Forgot password ───────────────────────────────────────────────────────
 const showForgotBtn = document.getElementById('show-forgot-btn') as HTMLButtonElement | null;
 const panelForgot = document.getElementById('panel-forgot');
 const forgotForm = document.getElementById('forgot-form') as HTMLFormElement | null;
@@ -461,7 +478,6 @@ forgotForm?.addEventListener('submit', async (e) => {
     }
 });
 
-// ── Change Password Modal ─────────────────────────────────────────────────
 const changePwModal   = document.getElementById('change-pw-modal');
 const changePwForm    = document.getElementById('change-pw-form') as HTMLFormElement | null;
 const cpNewEl         = document.getElementById('cp-new-password') as HTMLInputElement | null;
@@ -492,17 +508,13 @@ cpConfirmEl?.addEventListener('input', () => {
     clearError(cpError); updateCpBtn();
 });
 
-// Open via button
 document.getElementById('open-change-pw-btn')?.addEventListener('click', openChangePwModal);
-// Close via ✕ button, Cancel button, or Escape key / backdrop click
 document.getElementById('close-change-pw-modal')?.addEventListener('click', closeChangePwModal);
 document.getElementById('cp-cancel-btn')?.addEventListener('click', closeChangePwModal);
 changePwModal?.addEventListener('click', (e) => { if (e.target === changePwModal) closeChangePwModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChangePwModal(); });
 
-// Auto-open if arrived via reset link (?mode=update-password)
 if (new URLSearchParams(window.location.search).get('mode') === 'update-password') {
-    // Clean URL first, then open
     history.replaceState({}, '', window.location.pathname);
     setTimeout(openChangePwModal, 150);
 }
@@ -542,7 +554,73 @@ changePwForm?.addEventListener('submit', async (e) => {
     }
 });
 
-// ── Logout ────────────────────────────────────────────────────────────────
+const changeNameModal  = document.getElementById('change-name-modal');
+const changeNameForm   = document.getElementById('change-name-form') as HTMLFormElement | null;
+const cnNewEl          = document.getElementById('cn-new-name') as HTMLInputElement | null;
+const cnError          = document.getElementById('cn-error');
+const cnSubmitBtn      = document.getElementById('cn-submit-btn') as HTMLButtonElement | null;
+
+function openChangeNameModal() {
+    changeNameModal?.classList.remove('hidden');
+    cnNewEl?.focus();
+}
+function closeChangeNameModal() {
+    changeNameModal?.classList.add('hidden');
+    changeNameForm?.reset();
+    clearError(cnError);
+    markField('cn-new-name', false);
+    if (cnSubmitBtn) cnSubmitBtn.disabled = true;
+}
+function updateCnBtn() {
+    if (cnSubmitBtn) cnSubmitBtn.disabled = !(cnNewEl?.value.trim());
+}
+cnNewEl?.addEventListener('input', () => { markField('cn-new-name', false); clearError(cnError); updateCnBtn(); });
+
+document.getElementById('open-change-name-btn')?.addEventListener('click', openChangeNameModal);
+document.getElementById('close-change-name-modal')?.addEventListener('click', closeChangeNameModal);
+document.getElementById('cn-cancel-btn')?.addEventListener('click', closeChangeNameModal);
+changeNameModal?.addEventListener('click', (e) => { if (e.target === changeNameModal) closeChangeNameModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChangeNameModal(); });
+
+changeNameForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const display_name = cnNewEl?.value.trim() ?? '';
+    if (!display_name) { markField('cn-new-name', true); setError(cnError, 'Please enter a display name.'); return; }
+
+    clearError(cnError);
+    if (cnSubmitBtn) { cnSubmitBtn.disabled = true; cnSubmitBtn.textContent = '…'; }
+    try {
+        const res = await fetch('/api/auth/update-display-name', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({display_name}),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            const msg = data.error ?? 'Failed to update display name.';
+            setError(cnError, msg);
+            showToast(msg, 'error');
+        } else {
+            closeChangeNameModal();
+            showToast('Display name updated!', 'success');
+            const nameValueEl = document.querySelector('.account-field-value--name');
+            if (nameValueEl) {
+                const textNode = Array.from(nameValueEl.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+                if (textNode) {
+                    textNode.textContent = display_name + ' ';
+                } else {
+                    nameValueEl.insertBefore(document.createTextNode(display_name + ' '), nameValueEl.firstChild);
+                }
+            }
+        }
+    } catch {
+        setError(cnError, 'Network error. Please try again.');
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        if (cnSubmitBtn) { cnSubmitBtn.disabled = false; cnSubmitBtn.textContent = 'Update Name'; updateCnBtn(); }
+    }
+});
+
 document.getElementById('logout-btn')?.addEventListener('click', async () => {
     const displayName = (document.getElementById('logout-btn') as HTMLButtonElement | null)?.dataset.displayName;
     await fetch('/api/auth/supabase-logout', {method: 'POST'});

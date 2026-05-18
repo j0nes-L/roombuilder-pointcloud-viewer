@@ -160,7 +160,6 @@ refreshBtn.addEventListener('click', () => {
 });
 
 
-// Check session status from server on load
 async function checkSession(): Promise<void> {
     try {
         const res = await fetch('/api/auth/session');
@@ -236,6 +235,7 @@ function parseCaptureDate(captureId: string): string {
 
 const SVG_CLOUD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>`;
 const SVG_CACHED = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const SVG_TRASH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
 
 function updateItemCacheIcon(el: HTMLButtonElement, isCached: boolean): void {
     const icon = el.querySelector<HTMLElement>('.item-status-icon');
@@ -264,18 +264,64 @@ function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved:
     el.disabled = false;
     const sizeMB = (resolved.view.size_bytes / (1024 * 1024)).toFixed(1);
     const isCached = pointCloudCache.has(`${captureId}/${resolved.view.filename}`);
+    const deleteBtn = isLoggedIn
+        ? `<button class="item-delete-inline" title="Delete Capture" data-capture-id="${captureId}">${SVG_TRASH}</button>`
+        : '';
     el.innerHTML = `
     <div class="item-content">
       <div class="item-title">${parseCaptureDate(captureId)}</div>
       <div class="item-meta">${sizeMB} MB</div>
     </div>
+    ${deleteBtn}
     <span class="item-status-icon${isCached ? ' cached' : ''}" title="${isCached ? 'Cached locally' : 'Not cached'}">${isCached ? SVG_CACHED : SVG_CLOUD}</span>
   `;
     attachItemHandlers(el, captureId, resolved);
 }
 
 function attachItemHandlers(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud): void {
-    el.addEventListener('click', () => selectPointCloud(captureId, resolved, el));
+    el.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.item-delete-inline')) return;
+        selectPointCloud(captureId, resolved, el);
+    });
+
+    const delBtn = el.querySelector<HTMLButtonElement>('.item-delete-inline');
+    if (delBtn) {
+        delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await performDeleteCapture(captureId, resolved.view.filename, el);
+        });
+    }
+}
+
+async function performDeleteCapture(captureId: string, viewFilename: string, listItemEl: HTMLButtonElement): Promise<void> {
+    if (!confirm(`Delete Capture "${captureId}"?`)) return;
+    try {
+        await deleteCapture(captureId);
+        const pcKey = `${captureId}/${viewFilename}`;
+        if (selectedPcKey === pcKey) {
+            selectedPcKey = null;
+            activeListItemEl = null;
+            unloadPointCloud();
+            viewerEmpty.classList.remove('hidden');
+            pointSizeControl.classList.add('hidden');
+            setStatus('');
+        }
+        itemDownloadsSection.classList.remove('open');
+        if (itemDownloadsSection.parentNode) {
+            itemDownloadsSection.parentNode.removeChild(itemDownloadsSection);
+        }
+        dlSlotPly.classList.remove('open');
+        dlSlotColmap.classList.remove('open');
+        dlSlotMesh.classList.remove('open');
+        document.getElementById('dl-slot-delete')?.classList.remove('open');
+        listItemEl.remove();
+        if (activeListItemEl === listItemEl) activeListItemEl = null;
+        if (sessionList.children.length === 0) {
+            sessionList.innerHTML = '<div class="empty-state">No point clouds available.</div>';
+        }
+    } catch (err) {
+        setStatus(`Delete error: ${err instanceof Error ? err.message : err}`);
+    }
 }
 
 async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud, el: HTMLButtonElement): Promise<void> {
@@ -422,44 +468,5 @@ async function updateDownloadButtons(captureId: string, resolved: ResolvedPointC
         dlSlotMesh.classList.remove('open');
         const info = await checkMeshAvailability(captureId);
         applyMesh(info);
-    }
-
-    const dlSlotDelete = document.getElementById('dl-slot-delete')!;
-    const itemDeleteBtn = document.getElementById('item-delete-btn') as HTMLButtonElement;
-    if (isLoggedIn) {
-        dlSlotDelete.classList.add('open');
-        itemDeleteBtn.onclick = async () => {
-            if (!confirm(`Delete Capture "${captureId}"?`)) return;
-            try {
-                await deleteCapture(captureId);
-                itemDownloadsSection.classList.remove('open');
-                if (itemDownloadsSection.parentNode) {
-                    itemDownloadsSection.parentNode.removeChild(itemDownloadsSection);
-                }
-                dlSlotPly.classList.remove('open');
-                dlSlotColmap.classList.remove('open');
-                dlSlotMesh.classList.remove('open');
-                dlSlotDelete.classList.remove('open');
-                if (selectedPcKey === `${captureId}/${resolved.view.filename}`) {
-                    selectedPcKey = null;
-                    activeListItemEl = null;
-                    unloadPointCloud();
-                    viewerEmpty.classList.remove('hidden');
-                    pointSizeControl.classList.add('hidden');
-                    setStatus('');
-                }
-                const wrapper = activeListItemEl?.parentElement;
-                activeListItemEl?.remove();
-                if (wrapper?.classList.contains('list-item-wrapper')) wrapper.remove();
-                activeListItemEl = null;
-                if (sessionList.children.length === 0) {
-                    sessionList.innerHTML = '<div class="empty-state">No point clouds available.</div>';
-                }
-            } catch (err) {
-                setStatus(`Delete error: ${err instanceof Error ? err.message : err}`);
-            }
-        };
-    } else {
-        dlSlotDelete.classList.remove('open');
     }
 }

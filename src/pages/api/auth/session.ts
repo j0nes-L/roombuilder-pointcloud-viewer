@@ -8,7 +8,6 @@ export const GET: APIRoute = async ({request}) => {
     const {data: {user}} = await supabase.auth.getUser();
 
     if (!user) {
-        responseHeaders.set('Content-Type', 'application/json');
         return new Response(JSON.stringify({loggedIn: false, role: null, display_name: null}), {
             status: 200,
             headers: responseHeaders,

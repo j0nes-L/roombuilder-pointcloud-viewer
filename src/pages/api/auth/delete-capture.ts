@@ -6,7 +6,6 @@ export const DELETE: APIRoute = async ({request}) => {
     const responseHeaders = new Headers({'Content-Type': 'application/json'});
     const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
 
-    // Verify user is authenticated via Supabase (getUser() contacts auth server - secure)
     const {data: {user}} = await supabase.auth.getUser();
     if (!user) {
         responseHeaders.set('Content-Type', 'application/json');

@@ -13,6 +13,8 @@ export function showToast(message: string, type: ToastType = 'info', duration = 
     if (!container) {
         container = document.createElement('div');
         container.id = 'ss-toast-container';
+        const hasTopBar = !!document.querySelector('.admin-fixed');
+        container.style.top = hasTopBar ? '52px' : '16px';
         document.body.appendChild(container);
     }
 
@@ -44,7 +46,6 @@ export function initToastFromUrl() {
     const type = params.get('toast') as ToastType | null;
     const msg = params.get('msg');
     if (type && msg && ['success', 'error', 'info'].includes(type)) {
-        // slight delay so page renders first
         setTimeout(() => showToast(decodeURIComponent(msg), type), 100);
         params.delete('toast');
         params.delete('msg');
@@ -53,7 +54,6 @@ export function initToastFromUrl() {
     }
 }
 
-// Expose globally for inline scripts
 (window as any).showToast = showToast;
 
 if (document.readyState === 'loading') {

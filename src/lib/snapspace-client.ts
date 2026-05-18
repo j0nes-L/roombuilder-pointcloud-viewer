@@ -2,26 +2,6 @@ function getApiBase(): string {
     return '/api';
 }
 
-let apiKey = '';
-
-export function setApiKey(key: string): void {
-    apiKey = key;
-}
-
-export function getApiKey(): string {
-    return apiKey;
-}
-
-function authHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {};
-    if (apiKey) {
-        headers['X-API-Key'] = apiKey;
-    }
-    return headers;
-}
-
-export type UserRole = 'admin' | 'viewer';
-
 
 export interface CaptureListItem {
     id: string;
@@ -78,10 +58,10 @@ export function resolvePointCloud(resp: PointCloudsResponse): ResolvedPointCloud
     };
 }
 
-export async function checkMeshAvailability(captureId: string): Promise<{
-    available: boolean;
-    size_bytes: number | null
-}> {
+const meshInfoCache = new Map<string, { available: boolean; size_bytes: number | null }>();
+const meshInfoInflight = new Map<string, Promise<{ available: boolean; size_bytes: number | null }>>();
+
+export async function checkMeshAvailability(captureId: string): Promise<{ available: boolean; size_bytes: number | null }> {
     const cached = meshInfoCache.get(captureId);
     if (cached) return cached;
 
@@ -90,10 +70,7 @@ export async function checkMeshAvailability(captureId: string): Promise<{
 
     const p = (async () => {
         try {
-            const res = await fetch(
-                `${getApiBase()}/get-mesh-info?capture_id=${captureId}`,
-                {headers: authHeaders()},
-            );
+            const res = await fetch(`${getApiBase()}/get-mesh-info?capture_id=${captureId}`);
             if (!res.ok) return {available: false, size_bytes: null};
             const data = await res.json() as { available?: boolean; size_bytes?: number | null };
             const result = {
@@ -113,9 +90,6 @@ export async function checkMeshAvailability(captureId: string): Promise<{
     return p;
 }
 
-const meshInfoCache = new Map<string, { available: boolean; size_bytes: number | null }>();
-const meshInfoInflight = new Map<string, Promise<{ available: boolean; size_bytes: number | null }>>();
-
 export function getCachedMeshInfo(captureId: string): { available: boolean; size_bytes: number | null } | null {
     return meshInfoCache.get(captureId) ?? null;
 }
@@ -130,17 +104,7 @@ export function clearMeshInfoCache(captureId?: string): void {
     }
 }
 
-export async function fetchMeshGlb(
-    captureId: string,
-    onProgress?: (fraction: number) => void,
-    knownTotalBytes?: number | null,
-): Promise<ArrayBuffer> {
-    const res = await fetch(
-        `${getApiBase()}/get-mesh?capture_id=${captureId}`,
-        {headers: authHeaders()},
-    );
-    if (!res.ok) throw new Error(`Failed to download mesh: ${res.status}`);
-
+async function streamResponse(res: Response, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
     const clHeader = res.headers.get('Content-Length') || res.headers.get('X-Content-Length');
     const total = clHeader ? parseInt(clHeader, 10) : (knownTotalBytes || 0);
 
@@ -169,23 +133,21 @@ export async function fetchMeshGlb(
     return buf.buffer;
 }
 
+export async function fetchMeshGlb(captureId: string, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
+    const res = await fetch(`${getApiBase()}/get-mesh?capture_id=${captureId}`);
+    if (!res.ok) throw new Error(`Failed to download mesh: ${res.status}`);
+    return streamResponse(res, onProgress, knownTotalBytes);
+}
+
 export async function deleteCapture(captureId: string): Promise<void> {
     const res = await fetch(
         `${getApiBase()}/auth/delete-capture?capture_id=${encodeURIComponent(captureId)}`,
-        {
-            method: 'DELETE',
-            headers: {...authHeaders()},
-        },
+        {method: 'DELETE', credentials: 'include'},
     );
     if (!res.ok) throw new Error(`Failed to delete capture: ${res.status}`);
     pointCloudsRespCache.delete(captureId);
     clearMeshInfoCache(captureId);
 }
-
-export function clearAdminSession(): void {
-    // No-op: legacy function kept for compatibility
-}
-
 
 export interface CaptureOverviewEntry extends CaptureListItem {
     pointclouds_info: PointCloudsResponse | null;
@@ -194,29 +156,15 @@ export interface CaptureOverviewEntry extends CaptureListItem {
 
 export async function fetchCapturesOverview(forceRefresh = false): Promise<CaptureOverviewEntry[]> {
     const qs = forceRefresh ? '?refresh=1' : '';
-    const res = await fetch(`${getApiBase()}/get-captures-overview${qs}`, {
-        headers: authHeaders(),
-    });
+    const res = await fetch(`${getApiBase()}/get-captures-overview${qs}`);
     if (!res.ok) throw new Error(`Failed to fetch captures overview: ${res.status}`);
     const data = await res.json() as { captures: CaptureOverviewEntry[] };
 
     for (const entry of data.captures) {
-        if (entry.pointclouds_info) {
-            pointCloudsRespCache.set(entry.id, entry.pointclouds_info);
-        }
-        if (entry.mesh_info) {
-            meshInfoCache.set(entry.id, entry.mesh_info);
-        }
+        if (entry.pointclouds_info) pointCloudsRespCache.set(entry.id, entry.pointclouds_info);
+        if (entry.mesh_info) meshInfoCache.set(entry.id, entry.mesh_info);
     }
     return data.captures;
-}
-
-export async function fetchCaptureDetail(captureId: string): Promise<CaptureDetail> {
-    const res = await fetch(`${getApiBase()}/captures/${captureId}`, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Failed to fetch capture detail: ${res.status}`);
-    return res.json();
 }
 
 const pointCloudsRespCache = new Map<string, PointCloudsResponse>();
@@ -227,95 +175,15 @@ export function clearPointCloudsCache(captureId?: string): void {
     clearMeshInfoCache(captureId);
 }
 
-export async function fetchPointClouds(captureId: string, forceRefresh = false): Promise<PointCloudsResponse> {
-    if (!forceRefresh) {
-        const cached = pointCloudsRespCache.get(captureId);
-        if (cached) return cached;
-    }
-    const res = await fetch(`${getApiBase()}/get-pointclouds-info?capture_id=${captureId}`, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Failed to fetch point clouds: ${res.status}`);
-    const data = await res.json() as PointCloudsResponse;
-    pointCloudsRespCache.set(captureId, data);
-    return data;
-}
 
-export async function fetchPointCloudData(
-    captureId: string,
-    filename: string,
-    onProgress?: (fraction: number) => void,
-    knownTotalBytes?: number | null,
-): Promise<ArrayBuffer> {
-    const res = await fetch(
-        `${getApiBase()}/get-pointcloud?capture_id=${captureId}&filename=${filename}`,
-        {headers: authHeaders()},
-    );
+export async function fetchPointCloudData(captureId: string, filename: string, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
+    const res = await fetch(`${getApiBase()}/get-pointcloud?capture_id=${captureId}&filename=${filename}`);
     if (!res.ok) throw new Error(`Failed to download point cloud: ${res.status}`);
-
-    const clHeader = res.headers.get('Content-Length') || res.headers.get('X-Content-Length');
-    const total = clHeader ? parseInt(clHeader, 10) : (knownTotalBytes || 0);
-
-    if (!onProgress || !total || !res.body) {
-        return res.arrayBuffer();
-    }
-
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let received = 0;
-
-    while (true) {
-        const {done, value} = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        onProgress(received / total);
-    }
-
-    const buf = new Uint8Array(received);
-    let offset = 0;
-    for (const chunk of chunks) {
-        buf.set(chunk, offset);
-        offset += chunk.length;
-    }
-    return buf.buffer;
+    return streamResponse(res, onProgress, knownTotalBytes);
 }
 
-export async function fetchColmapZip(
-    captureId: string,
-    onProgress?: (fraction: number) => void,
-    knownTotalBytes?: number | null,
-): Promise<ArrayBuffer> {
-    const res = await fetch(
-        `${getApiBase()}/get-colmap?capture_id=${captureId}`,
-        {headers: authHeaders()},
-    );
+export async function fetchColmapZip(captureId: string, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
+    const res = await fetch(`${getApiBase()}/get-colmap?capture_id=${captureId}`);
     if (!res.ok) throw new Error(`Failed to download COLMAP zip: ${res.status}`);
-
-    const clHeader = res.headers.get('Content-Length') || res.headers.get('X-Content-Length');
-    const total = clHeader ? parseInt(clHeader, 10) : (knownTotalBytes || 0);
-
-    if (!onProgress || !total || !res.body) {
-        return res.arrayBuffer();
-    }
-
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let received = 0;
-
-    while (true) {
-        const {done, value} = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        onProgress(received / total);
-    }
-
-    const buf = new Uint8Array(received);
-    let offset = 0;
-    for (const chunk of chunks) {
-        buf.set(chunk, offset);
-        offset += chunk.length;
-    }
-    return buf.buffer;
+    return streamResponse(res, onProgress, knownTotalBytes);
 }

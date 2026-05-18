@@ -32,7 +32,6 @@ export const POST: APIRoute = async ({request}) => {
         });
     }
 
-    // Fetch display_name from profiles for the toast message
     const {data: profile} = await supabase
         .from('profiles')
         .select('display_name')
