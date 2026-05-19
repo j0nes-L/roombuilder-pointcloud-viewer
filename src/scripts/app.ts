@@ -479,7 +479,7 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
     dlSlotShare.classList.remove('open');
 
     viewerEmpty.classList.add('hidden');
-    viewerProgress.textContent = '0 %';
+    viewerProgress.textContent = 'Preparing…';
     viewerLoading.classList.remove('hidden');
 
     await updateDownloadButtons(captureId, resolved, createdAt);
@@ -495,7 +495,7 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         } else {
             setStatus('Downloading point cloud…');
             buffer = await fetchPointCloudData(captureId, pc.filename, (f) => {
-                viewerProgress.textContent = `Downloading… ${Math.round(f * 100)} %`;
+                if (f > 0) viewerProgress.textContent = `Downloading… ${Math.round(f * 100)} %`;
             }, pc.size_bytes);
             pointCloudCache.set(cacheKey, buffer);
         }
