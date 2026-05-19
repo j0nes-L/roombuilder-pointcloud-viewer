@@ -27,6 +27,7 @@ export async function userHasCaptureAccess(
 export interface CapturePermissionEntry {
     capture_id: string;
     role: string;
+    created_at: string;
 }
 
 export async function listUserCaptures(supabase: SupabaseClient): Promise<CapturePermissionEntry[]> {
@@ -35,7 +36,7 @@ export async function listUserCaptures(supabase: SupabaseClient): Promise<Captur
         .select('capture_id, role, created_at')
         .order('created_at', {ascending: false});
     if (error || !data) return [];
-    return data.map(r => ({capture_id: r.capture_id as string, role: r.role as string}));
+    return data.map(r => ({capture_id: r.capture_id as string, role: r.role as string, created_at: r.created_at as string}));
 }
 
 export async function listUserCaptureIds(supabase: SupabaseClient): Promise<string[]> {

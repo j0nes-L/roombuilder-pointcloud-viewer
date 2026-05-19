@@ -62,7 +62,7 @@ export const GET: APIRoute = async ({request}) => {
 
             try {
                 range.body?.cancel();
-            } catch { /* ignore */
+            } catch {
             }
 
             if (!range.ok && range.status !== 206) {

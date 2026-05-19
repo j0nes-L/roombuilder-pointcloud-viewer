@@ -8,6 +8,7 @@ export interface CaptureListItem {
     folder: string;
     raw_images: number;
     preprocessed_images: number;
+    created_at: string;
 }
 
 export interface CaptureDetail {
@@ -123,6 +124,7 @@ async function streamResponse(res: Response, onProgress?: (fraction: number) => 
         received += value.length;
         onProgress(received / total);
     }
+    onProgress(1);
 
     const buf = new Uint8Array(received);
     let offset = 0;

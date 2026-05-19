@@ -48,20 +48,20 @@ export const DELETE: APIRoute = async ({request}) => {
         return new Response(JSON.stringify({ok: true}), {status: 200, headers: responseHeaders});
     }
 
-    const apiKey = import.meta.env.SNAPSPACE_API_KEY;
     const baseUrl = getApiUrl();
 
-    if (!apiKey) {
-        return new Response(JSON.stringify({error: 'API key is not configured.'}), {
-            status: 500,
-            headers: {'Content-Type': 'application/json'},
+    const {data: {session}} = await supabase.auth.getSession();
+    if (!session) {
+        return new Response(JSON.stringify({error: 'Unauthorized. Please log in.'}), {
+            status: 401,
+            headers: responseHeaders,
         });
     }
 
     try {
         const response = await fetch(`${baseUrl}/captures/${encodeURIComponent(captureId)}`, {
             method: 'DELETE',
-            headers: {'X-API-Key': apiKey},
+            headers: {'Authorization': `Bearer ${session.access_token}`},
         });
 
         if (!response.ok) {

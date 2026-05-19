@@ -21,18 +21,14 @@ export const GET: APIRoute = async ({request}) => {
     }
 
     const captureId = new URL(request.url).searchParams.get('capture_id');
-
     if (!captureId) {
         return new Response(JSON.stringify({error: 'Missing capture_id parameter.'}), {
-            status: 400,
-            headers: {'Content-Type': 'application/json'},
+            status: 400, headers: {'Content-Type': 'application/json'},
         });
     }
-
     if (!isValidCaptureId(captureId)) {
         return new Response(JSON.stringify({error: 'Invalid capture_id format.'}), {
-            status: 400,
-            headers: {'Content-Type': 'application/json'},
+            status: 400, headers: {'Content-Type': 'application/json'},
         });
     }
 
@@ -43,41 +39,26 @@ export const GET: APIRoute = async ({request}) => {
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
     try {
-        const path = `Capture_${captureId}/pointclouds/colmap.zip`;
-        const fetchUrl = `${baseUrl}/share/get-download-link?path=${encodeURIComponent(path)}`;
+        const upstream = await fetch(
+            `${baseUrl}/captures/${encodeURIComponent(captureId)}/pointclouds/colmap.zip`,
+            {headers: {'X-API-Key': apiKey}},
+        );
 
-        const linkResponse = await fetch(fetchUrl, {
-            headers: {'X-API-Key': apiKey},
-        });
-
-        if (!linkResponse.ok) {
-            const errorText = await linkResponse.text();
-            return new Response(errorText, {
-                status: linkResponse.status,
-                headers: {'Content-Type': 'application/json'},
-            });
+        if (!upstream.ok) {
+            const text = await upstream.text();
+            return new Response(text, {status: upstream.status, headers: {'Content-Type': 'application/json'}});
         }
 
-        const data = await linkResponse.json();
-        const downloadUrl = data.url;
-
-        if (!downloadUrl) {
-            return new Response(JSON.stringify({error: 'No download URL returned from API.'}), {
-                status: 500,
-                headers: {'Content-Type': 'application/json'},
-            });
-        }
-
-        return Response.redirect(downloadUrl, 302);
+        const headers = new Headers();
+        const cl = upstream.headers.get('Content-Length');
+        if (cl) headers.set('Content-Length', cl);
+        headers.set('Content-Type', 'application/zip');
+        return new Response(upstream.body, {status: 200, headers});
 
     } catch (error) {
         return new Response(JSON.stringify({
             error: 'An internal error occurred.',
             details: error instanceof Error ? error.message : String(error),
-        }), {
-            status: 500,
-            headers: {'Content-Type': 'application/json'},
-        });
+        }), {status: 500, headers: {'Content-Type': 'application/json'}});
     }
 };
-

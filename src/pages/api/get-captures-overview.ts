@@ -8,6 +8,7 @@ interface CaptureListItem {
     folder: string;
     raw_images: number;
     preprocessed_images: number;
+    created_at: string;
 }
 
 interface PointCloudInfo {
@@ -77,31 +78,12 @@ export const GET: APIRoute = async ({request}) => {
     if (allowedEntries.length === 0) {
         return new Response(JSON.stringify({captures: []}), {status: 200, headers: responseHeaders});
     }
-    const allowedMap = new Map(allowedEntries.map(e => [e.capture_id.toLowerCase(), e.role]));
 
     try {
-        const listRes = await fetch(`${baseUrl}/captures`, {
-            headers: {'X-API-Key': apiKey},
-        });
-
-        if (!listRes.ok) {
-            const errorText = await listRes.text();
-            return new Response(JSON.stringify({
-                error: 'Failed to fetch captures from SnapSpace API.',
-                status: listRes.status,
-                details: errorText,
-            }), {
-                status: listRes.status,
-                headers: {'Content-Type': 'application/json'},
-            });
-        }
-
-        const listData = await listRes.json() as { captures: CaptureListItem[] };
-        const captures = (listData.captures ?? []).filter(c => allowedMap.has(c.id.toLowerCase()));
-
-        const enriched = await mapWithConcurrency(captures, FANOUT_CONCURRENCY, async (c) => {
-            const id = encodeURIComponent(c.id);
-            const role = allowedMap.get(c.id.toLowerCase()) ?? 'collaborator';
+        const enriched = await mapWithConcurrency(allowedEntries, FANOUT_CONCURRENCY, async (entry) => {
+            const id = encodeURIComponent(entry.capture_id);
+            const role = entry.role;
+            const created_at = entry.created_at;
 
             const pointcloudsP = (async (): Promise<PointCloudsResponse | null> => {
                 try {
@@ -129,7 +111,7 @@ export const GET: APIRoute = async ({request}) => {
                         });
                         try {
                             range.body?.cancel();
-                        } catch { /* ignore */ }
+                        } catch {}
                         if (!range.ok && range.status !== 206) {
                             return {available: false, size_bytes: null};
                         }
@@ -152,10 +134,22 @@ export const GET: APIRoute = async ({request}) => {
             })();
 
             const [pointclouds_info, mesh_info] = await Promise.all([pointcloudsP, meshP]);
-            return {...c, pointclouds_info, mesh_info, role} satisfies CaptureOverviewEntry;
+            const captureItem: CaptureOverviewEntry = {
+                id: entry.capture_id,
+                folder: entry.capture_id,
+                raw_images: 0,
+                preprocessed_images: 0,
+                created_at,
+                pointclouds_info,
+                mesh_info,
+                role,
+            };
+            return captureItem;
         });
 
-        return new Response(JSON.stringify({captures: enriched}), {
+        const visible = enriched.filter(e => e.pointclouds_info !== null);
+
+        return new Response(JSON.stringify({captures: visible}), {
             status: 200,
             headers: responseHeaders,
         });

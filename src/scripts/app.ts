@@ -48,6 +48,7 @@ const pointCloudCache = new Map<string, ArrayBuffer>();
 let lastLoadedBuffer: ArrayBuffer | null = null;
 let lastLoadedFilename: string | null = null;
 let lastDownloadCaptureId: string | null = null;
+let lastDownloadCreatedAt: string | null = null;
 let lastDownloadPc: PointCloudInfo | null = null;
 let prefetchedDownloadBuffer: ArrayBuffer | null = null;
 let colmapAvailable = false;
@@ -92,7 +93,7 @@ downloadBtn.addEventListener('click', async () => {
                 lastDownloadPc.size_bytes,
             );
         }
-        await triggerDownload(buffer, 'application/octet-stream', `Capture_${lastDownloadCaptureId}_pointcloud.ply`);
+        await triggerDownload(buffer, 'application/octet-stream', `capture_${captureTimestamp(lastDownloadCreatedAt ?? '')}.ply`);
     } catch (err) {
         showToast(`Download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
@@ -111,7 +112,7 @@ downloadColmapBtn.addEventListener('click', async () => {
         const buffer = await fetchColmapZip(lastDownloadCaptureId, (f) => {
             setProgress(dlProgressColmap, f);
         }, colmapSizeBytes);
-        await triggerDownload(buffer, 'application/zip', `Capture_${lastDownloadCaptureId}_colmap.zip`);
+        await triggerDownload(buffer, 'application/zip', `capture_${captureTimestamp(lastDownloadCreatedAt ?? '')}_colmap.zip`);
     } catch (err) {
         showToast(`COLMAP download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
@@ -130,7 +131,7 @@ downloadMeshBtn.addEventListener('click', async () => {
         const buffer = await fetchMeshGlb(lastDownloadCaptureId, (f) => {
             setProgress(dlProgressMesh, f);
         }, meshSizeBytes);
-        await triggerDownload(buffer, 'model/gltf-binary', `Capture_${lastDownloadCaptureId}_mesh.glb`);
+        await triggerDownload(buffer, 'model/gltf-binary', `capture_${captureTimestamp(lastDownloadCreatedAt ?? '')}.glb`);
     } catch (err) {
         showToast(`Mesh download failed: ${err instanceof Error ? err.message : err}`, 'error');
     } finally {
@@ -208,14 +209,11 @@ async function checkSession(): Promise<void> {
             isLoggedIn = !!data.loggedIn;
         }
     } catch {
-        /* keep SSR-seeded value */
     }
 }
 
-// If the SSR value was available, start loading immediately and verify the session in the background.
-// Only block on checkSession() when there was no SSR value to seed from.
 if (ssrValueAvailable) {
-    checkSession().then(() => { /* background refresh — no reload needed */ });
+    checkSession().then(() => {});
 } else {
     await checkSession();
 }
@@ -302,21 +300,21 @@ async function loadSessions(): Promise<void> {
             return;
         }
         sessionList.innerHTML = '';
-        overview.sort((a, b) => b.id.localeCompare(a.id));
+        overview.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         let rendered = 0;
         overview.forEach((entry, i) => {
-            const el = renderSkeletonItem(entry.id);
+            const el = renderSkeletonItem(entry.id, entry.created_at);
             el.style.animationDelay = `${Math.min(i * 25, 400)}ms`;
             sessionList.appendChild(el);
             if (!entry.pointclouds_info) { el.remove(); return; }
             const resolved = resolvePointCloud(entry.pointclouds_info);
             if (!resolved) { el.remove(); return; }
-            upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator');
+            upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator', entry.created_at);
             rendered++;
             const pcKey = `${entry.id}/${resolved.view.filename}`;
             if (selectedPcKey === pcKey) {
                 el.classList.add('active');
-                updateDownloadButtons(entry.id, resolved);
+                updateDownloadButtons(entry.id, resolved, entry.created_at);
             }
         });
         if (rendered === 0) {
@@ -327,13 +325,33 @@ async function loadSessions(): Promise<void> {
     }
 }
 
-function parseCaptureDate(captureId: string): string {
-    const m = captureId.match(/(\d{4})[\-_]?(\d{2})[\-_]?(\d{2})[\-_T]?(\d{2})[\-:_]?(\d{2})[\-:_]?(\d{2})/);
-    if (m) {
-        const [, y, mo, d, h, mi] = m;
-        return `Capture from ${d}.${mo}.${y} at ${h}:${mi}`;
+function captureTimestamp(isoDate: string): string {
+    try {
+        const d = new Date(isoDate);
+        const y = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const h = String(d.getHours()).padStart(2, '0');
+        const mi = String(d.getMinutes()).padStart(2, '0');
+        const s = String(d.getSeconds()).padStart(2, '0');
+        return `${y}${mo}${day}_${h}${mi}${s}`;
+    } catch {
+        return isoDate;
     }
-    return captureId;
+}
+
+function formatCaptureDate(isoDate: string): string {
+    try {
+        const d = new Date(isoDate);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `Capture from ${day}.${month}.${year} at ${hours}:${minutes}`;
+    } catch {
+        return isoDate;
+    }
 }
 
 const SVG_CLOUD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>`;
@@ -348,13 +366,13 @@ function updateItemCacheIcon(el: HTMLButtonElement, isCached: boolean): void {
     icon.title = isCached ? 'Cached locally' : 'Not cached';
 }
 
-function renderSkeletonItem(captureId: string): HTMLButtonElement {
+function renderSkeletonItem(captureId: string, createdAt: string): HTMLButtonElement {
     const el = document.createElement('button');
     el.className = 'list-item enter is-skeleton';
     el.disabled = true;
     el.innerHTML = `
     <div class="item-content">
-      <div class="item-title">${parseCaptureDate(captureId)}</div>
+      <div class="item-title">${formatCaptureDate(createdAt)}</div>
       <div class="item-meta"><span class="skeleton-bar"></span></div>
     </div>
     <span class="item-status-icon" title="Not cached">${SVG_CLOUD}</span>
@@ -362,7 +380,7 @@ function renderSkeletonItem(captureId: string): HTMLButtonElement {
     return el;
 }
 
-function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string): void {
+function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string, createdAt: string): void {
     el.classList.remove('is-skeleton');
     el.disabled = false;
     const sizeMB = (resolved.view.size_bytes / (1024 * 1024)).toFixed(1);
@@ -373,19 +391,19 @@ function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved:
         : '';
     el.innerHTML = `
     <div class="item-content">
-      <div class="item-title">${parseCaptureDate(captureId)}</div>
+      <div class="item-title">${formatCaptureDate(createdAt)}</div>
       <div class="item-meta">${sizeMB} MB</div>
     </div>
     ${deleteBtn}
     <span class="item-status-icon${isCached ? ' cached' : ''}" title="${isCached ? 'Cached locally' : 'Not cached'}">${isCached ? SVG_CACHED : SVG_CLOUD}</span>
   `;
-    attachItemHandlers(el, captureId, resolved, role);
+    attachItemHandlers(el, captureId, resolved, role, createdAt);
 }
 
-function attachItemHandlers(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string): void {
+function attachItemHandlers(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string, createdAt: string): void {
     el.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).closest('.item-delete-inline')) return;
-        selectPointCloud(captureId, resolved, el);
+        selectPointCloud(captureId, resolved, el, createdAt);
     });
 
     const delBtn = el.querySelector<HTMLButtonElement>('.item-delete-inline');
@@ -427,12 +445,13 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
         if (sessionList.children.length === 0) {
             sessionList.innerHTML = '<div class="empty-state">No point clouds available.</div>';
         }
+        showToast(role === 'owner' ? 'Capture deleted.' : 'Capture removed from library.', 'success');
     } catch (err) {
         showToast(`Delete failed: ${err instanceof Error ? err.message : err}`, 'error');
     }
 }
 
-async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud, el: HTMLButtonElement): Promise<void> {
+async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud, el: HTMLButtonElement, createdAt: string): Promise<void> {
     const pc = resolved.view;
     const pcKey = `${captureId}/${pc.filename}`;
     if (selectedPcKey === pcKey) return;
@@ -463,8 +482,7 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
     viewerProgress.textContent = '0 %';
     viewerLoading.classList.remove('hidden');
 
-    // Buttons sofort aufklappen, noch vor dem Laden (aber ausgegraut)
-    await updateDownloadButtons(captureId, resolved);
+    await updateDownloadButtons(captureId, resolved, createdAt);
     setDownloadBusy(true);
 
     try {
@@ -516,6 +534,7 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         setPointSize(0.005);
 
         setStatus(`Loaded Point Cloud for Capture_${captureId}`);
+        showToast('Successfully loaded capture.', 'success');
         updateItemCacheIcon(el, true);
     } catch (err: unknown) {
         selectedPcKey = null;
@@ -550,8 +569,9 @@ function setProgress(bar: HTMLElement, fraction: number | null): void {
     }
 }
 
-async function updateDownloadButtons(captureId: string, resolved: ResolvedPointCloud): Promise<void> {
+async function updateDownloadButtons(captureId: string, resolved: ResolvedPointCloud, createdAt: string): Promise<void> {
     lastDownloadCaptureId = captureId;
+    lastDownloadCreatedAt = createdAt;
     lastDownloadPc = resolved.download;
 
     const activeItem = sessionList.querySelector<HTMLButtonElement>('.list-item.active');

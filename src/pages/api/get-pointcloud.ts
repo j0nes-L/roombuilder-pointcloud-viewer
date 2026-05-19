@@ -10,15 +10,7 @@ import {
 } from '../../lib/capture-permissions';
 
 export const GET: APIRoute = async ({request}) => {
-    const apiKey = import.meta.env.SNAPSPACE_API_KEY;
     const baseUrl = getApiUrl();
-
-    if (!apiKey) {
-        return new Response(JSON.stringify({error: 'API key is not configured.'}), {
-            status: 500,
-            headers: {'Content-Type': 'application/json'},
-        });
-    }
 
     const url = new URL(request.url);
     const captureId = url.searchParams.get('capture_id');
@@ -30,7 +22,7 @@ export const GET: APIRoute = async ({request}) => {
             headers: {'Content-Type': 'application/json'},
         });
     }
-    if (!isValidCaptureId(captureId) || !/^[A-Za-z0-9._-]+$/.test(filename)) {
+    if (!isValidCaptureId(captureId) || !/^[A-Za-z0-9._/-]+$/.test(filename)) {
         return new Response(JSON.stringify({error: 'Invalid parameter format.'}), {
             status: 400,
             headers: {'Content-Type': 'application/json'},
@@ -43,12 +35,15 @@ export const GET: APIRoute = async ({request}) => {
     if (!user) return unauthorizedResponse();
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
+    const {data: {session}} = await supabase.auth.getSession();
+    if (!session) return unauthorizedResponse();
+
     try {
-        const path = `Capture_${captureId}/pointclouds/${filename}`;
+        const path = `${captureId}/pointclouds/${filename}`;
         const fetchUrl = `${baseUrl}/share/get-download-link?path=${encodeURIComponent(path)}`;
 
         const linkResponse = await fetch(fetchUrl, {
-            headers: {'X-API-Key': apiKey},
+            headers: {'Authorization': `Bearer ${session.access_token}`},
         });
 
         if (!linkResponse.ok) {
@@ -69,7 +64,6 @@ export const GET: APIRoute = async ({request}) => {
             });
         }
 
-        // Direkt den Dateiinhalt streamen statt zu redirecten, damit Content-Length erhalten bleibt
         const fileResponse = await fetch(downloadUrl);
         if (!fileResponse.ok) {
             return new Response(JSON.stringify({error: 'Failed to fetch file from storage.'}), {
@@ -80,8 +74,7 @@ export const GET: APIRoute = async ({request}) => {
         const headers = new Headers();
         const contentLength = fileResponse.headers.get('Content-Length');
         if (contentLength) headers.set('Content-Length', contentLength);
-        const contentType = fileResponse.headers.get('Content-Type') || 'application/octet-stream';
-        headers.set('Content-Type', contentType);
+        headers.set('Content-Type', fileResponse.headers.get('Content-Type') || 'application/octet-stream');
         return new Response(fileResponse.body, {status: 200, headers});
 
     } catch (error) {
@@ -94,4 +87,3 @@ export const GET: APIRoute = async ({request}) => {
         });
     }
 };
-
