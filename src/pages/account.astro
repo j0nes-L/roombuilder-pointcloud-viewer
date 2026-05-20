@@ -142,7 +142,7 @@ const mode = Astro.url.searchParams.get('mode');
                         </div>
                         <div class="form-group">
                             <label class="login-label" for="reg-display-name">Display Name</label>
-                            <input id="reg-display-name" type="text" class="login-input" placeholder="Your name" autocomplete="name" required/>
+                            <input id="reg-display-name" type="text" class="login-input" placeholder="Your name" autocomplete="name" minlength="3" maxlength="24" required/>
                         </div>
                         <div class="form-group">
                             <label class="login-label" for="reg-password">Password</label>
@@ -216,7 +216,7 @@ const mode = Astro.url.searchParams.get('mode');
         <form id="change-name-form" novalidate>
             <div class="form-group">
                 <label class="login-label" for="cn-new-name">New Display Name</label>
-                <input id="cn-new-name" type="text" class="login-input" placeholder="Your name" autocomplete="name" required/>
+                <input id="cn-new-name" type="text" class="login-input" placeholder="Your name" autocomplete="name" minlength="3" maxlength="24" required/>
             </div>
             <div id="cn-error" class="login-error hidden"></div>
             <div class="modal-actions" style="gap:8px;">
@@ -398,6 +398,8 @@ registerForm?.addEventListener('submit', async (e) => {
     if (hasError) { setError(registerError, 'Please fill in all fields.'); return; }
     if (password !== passwordConfirm) { markMatch('reg-password-confirm', false); setError(registerError, 'Passwords do not match.'); return; }
     if (password.length < 6) { markField('reg-password', true); setError(registerError, 'Password must be at least 6 characters.'); return; }
+    if (display_name.length < 3 || display_name.length > 24) { markField('reg-display-name', true); setError(registerError, 'Display name must be between 3 and 24 characters.'); return; }
+    if (!/^[\p{L}\p{N} ._-]+$/u.test(display_name)) { markField('reg-display-name', true); setError(registerError, 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'); return; }
 
     clearError(registerError);
     if (registerBtn) { registerBtn.disabled = true; registerBtn.textContent = '…'; }
@@ -592,6 +594,8 @@ changeNameForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const display_name = cnNewEl?.value.trim() ?? '';
     if (!display_name) { markField('cn-new-name', true); setError(cnError, 'Please enter a display name.'); return; }
+    if (display_name.length < 3 || display_name.length > 24) { markField('cn-new-name', true); setError(cnError, 'Display name must be between 3 and 24 characters.'); return; }
+    if (!/^[\p{L}\p{N} ._-]+$/u.test(display_name)) { markField('cn-new-name', true); setError(cnError, 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'); return; }
 
     clearError(cnError);
     if (cnSubmitBtn) { cnSubmitBtn.disabled = true; cnSubmitBtn.textContent = '…'; }

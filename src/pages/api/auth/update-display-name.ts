@@ -33,6 +33,19 @@ export const POST: APIRoute = async ({request}) => {
 
     const trimmed = display_name.trim();
 
+    if (trimmed.length < 3 || trimmed.length > 24) {
+        return new Response(JSON.stringify({error: 'Display name must be between 3 and 24 characters.'}), {
+            status: 400,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+    if (!/^[\p{L}\p{N} ._-]+$/u.test(trimmed)) {
+        return new Response(JSON.stringify({error: 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'}), {
+            status: 400,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+
     const {error: profileError} = await supabase
         .from('profiles')
         .update({display_name: trimmed})

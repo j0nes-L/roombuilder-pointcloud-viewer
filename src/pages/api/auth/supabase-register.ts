@@ -24,11 +24,25 @@ export const POST: APIRoute = async ({request}) => {
         });
     }
 
+    const trimmedName = display_name.trim();
+    if (trimmedName.length < 3 || trimmedName.length > 24) {
+        return new Response(JSON.stringify({error: 'Display name must be between 3 and 24 characters.'}), {
+            status: 400,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+    if (!/^[\p{L}\p{N} ._-]+$/u.test(trimmedName)) {
+        return new Response(JSON.stringify({error: 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'}), {
+            status: 400,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+
     const {data, error} = await supabase.auth.signUp({
         email,
         password,
         options: {
-            data: {display_name: display_name.trim()},
+            data: {display_name: trimmedName},
             emailRedirectTo: `${getOrigin(request)}/api/auth/callback?flow=signup`,
         },
     });
@@ -52,7 +66,7 @@ export const POST: APIRoute = async ({request}) => {
     const needsConfirmation = !data.session;
 
     responseHeaders.set('Content-Type', 'application/json');
-    return new Response(JSON.stringify({ok: true, needsConfirmation, display_name: display_name.trim()}), {
+    return new Response(JSON.stringify({ok: true, needsConfirmation, display_name: trimmedName}), {
         status: 200,
         headers: responseHeaders,
     });
