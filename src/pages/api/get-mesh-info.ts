@@ -40,7 +40,7 @@ export const GET: APIRoute = async ({request}) => {
     if (!user) return unauthorizedResponse();
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
-    const apiUrl = `${baseUrl}/captures/${captureId}/pointclouds/mesh.glb`;
+    const apiUrl = `${baseUrl}/captures/${captureId}/files/mesh.glb`;
 
     const json = (body: Record<string, unknown>, status = 200) =>
         new Response(JSON.stringify(body), {

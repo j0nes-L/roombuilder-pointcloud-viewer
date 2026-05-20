@@ -39,7 +39,7 @@ export const GET: APIRoute = async ({request}) => {
     if (!session) return unauthorizedResponse();
 
     try {
-        const path = `${captureId}/pointclouds/${filename}`;
+        const path = `${captureId}/files/${filename}`;
         const fetchUrl = `${baseUrl}/share/get-download-link?path=${encodeURIComponent(path)}`;
 
         const linkResponse = await fetch(fetchUrl, {

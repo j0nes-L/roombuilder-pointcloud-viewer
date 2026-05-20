@@ -1,4 +1,4 @@
-import type {PointCloudInfo, ResolvedPointCloud} from '../lib/snapspace-client';
+import type {PointCloudInfo, PointCloudsResponse, ResolvedPointCloud} from '../lib/snapspace-client';
 import {
     checkMeshAvailability,
     clearPointCloudsCache,
@@ -15,10 +15,13 @@ import {showToast} from './toast';
 import {
     getPointCount,
     initViewer,
+    loadColmapCameras,
     loadPointCloudFromBuffer,
     setPointSize,
-    unloadPointCloud
+    unloadColmapCameras,
+    unloadPointCloud,
 } from './viewer';
+import type {ColmapCameraData} from './viewer';
 
 const sessionList = document.getElementById('session-list')!;
 const viewerContainer = document.getElementById('viewer')!;
@@ -44,6 +47,26 @@ const dlProgressColmap = document.getElementById('dl-progress-colmap')!;
 const dlProgressMesh = document.getElementById('dl-progress-mesh')!;
 
 const pointCloudCache = new Map<string, ArrayBuffer>();
+
+// In-memory cache for COLMAP tooltip images (key: "captureId/imageName" → Blob-URL)
+const colmapImageCache = new Map<string, string>();
+
+function clearColmapImageCache(): void {
+    colmapImageCache.forEach(url => URL.revokeObjectURL(url));
+    colmapImageCache.clear();
+}
+
+async function getColmapImageUrl(captureId: string, name: string): Promise<string> {
+    const key = `${captureId}/${name}`;
+    if (colmapImageCache.has(key)) return colmapImageCache.get(key)!;
+    const apiUrl = `/api/get-colmap-image?capture_id=${encodeURIComponent(captureId)}&name=${encodeURIComponent(name)}`;
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    colmapImageCache.set(key, blobUrl);
+    return blobUrl;
+}
 
 let lastLoadedBuffer: ArrayBuffer | null = null;
 let lastLoadedFilename: string | null = null;
@@ -306,9 +329,27 @@ async function loadSessions(): Promise<void> {
             const el = renderSkeletonItem(entry.id, entry.created_at);
             el.style.animationDelay = `${Math.min(i * 25, 400)}ms`;
             sessionList.appendChild(el);
-            if (!entry.pointclouds_info) { el.remove(); return; }
+            if (!entry.pointclouds_info) {
+                upgradeSkeletonItemPending(el, entry.id, entry.role ?? 'collaborator', entry.created_at, `No data (${(entry as any).upstream_status ?? 'err'})`);
+                rendered++;
+                return;
+            }
+            if (entry.pointclouds_info.isColmap) {
+                upgradeSkeletonItemColmap(el, entry.id, entry.pointclouds_info, entry.role ?? 'collaborator', entry.created_at);
+                rendered++;
+                const pcKey = `${entry.id}/__colmap__`;
+                if (selectedPcKey === pcKey) {
+                    el.classList.add('active');
+                    updateDownloadButtonsColmap(entry.id, entry.pointclouds_info, entry.created_at);
+                }
+                return;
+            }
             const resolved = resolvePointCloud(entry.pointclouds_info);
-            if (!resolved) { el.remove(); return; }
+            if (!resolved) {
+                upgradeSkeletonItemPending(el, entry.id, entry.role ?? 'collaborator', entry.created_at, 'Processing…');
+                rendered++;
+                return;
+            }
             upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator', entry.created_at);
             rendered++;
             const pcKey = `${entry.id}/${resolved.view.filename}`;
@@ -380,6 +421,215 @@ function renderSkeletonItem(captureId: string, createdAt: string): HTMLButtonEle
     return el;
 }
 
+function upgradeSkeletonItemPending(el: HTMLButtonElement, captureId: string, role: string, createdAt: string, status: string): void {
+    el.classList.remove('is-skeleton');
+    el.disabled = true;
+    const deleteTitle = role === 'owner' ? 'Delete Capture' : 'Remove from library';
+    const deleteBtn = isLoggedIn
+        ? `<button class="item-delete-inline" title="${deleteTitle}" data-capture-id="${captureId}" data-role="${role}">${SVG_TRASH}</button>`
+        : '';
+    el.innerHTML = `
+    <div class="item-content">
+      <div class="item-title">${formatCaptureDate(createdAt)}</div>
+      <div class="item-meta">${status}</div>
+    </div>
+    ${deleteBtn}
+  `;
+    const delBtn = el.querySelector<HTMLButtonElement>('.item-delete-inline');
+    if (delBtn) {
+        delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await performDeleteCapture(captureId, '__pending__', el, role);
+        });
+    }
+}
+
+function upgradeSkeletonItemColmap(el: HTMLButtonElement, captureId: string, info: PointCloudsResponse, role: string, createdAt: string): void {
+    el.classList.remove('is-skeleton');
+    const colmapReady = !!info.colmap_url;
+    const colmapMB = info.colmap_size_bytes ? (info.colmap_size_bytes / (1024 * 1024)).toFixed(1) : null;
+    const metaText = colmapReady
+        ? (colmapMB ? `COLMAP · ${colmapMB} MB` : 'COLMAP · ready')
+        : 'Creating COLMAP .zip…';
+    const deleteTitle = role === 'owner' ? 'Delete Capture' : 'Remove from library';
+    const deleteBtn = isLoggedIn
+        ? `<button class="item-delete-inline" title="${deleteTitle}" data-capture-id="${captureId}" data-role="${role}">${SVG_TRASH}</button>`
+        : '';
+    el.disabled = !colmapReady;
+    el.innerHTML = `
+    <div class="item-content">
+      <div class="item-title">${formatCaptureDate(createdAt)}</div>
+      <div class="item-meta">${metaText}</div>
+    </div>
+    ${deleteBtn}
+  `;
+    attachColmapItemHandlers(el, captureId, info, role, createdAt);
+}
+
+function attachColmapItemHandlers(el: HTMLButtonElement, captureId: string, info: PointCloudsResponse, role: string, createdAt: string): void {
+    el.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.item-delete-inline')) return;
+        if (!info.colmap_url) return;
+        selectColmapCapture(captureId, info, el, createdAt);
+    });
+    const delBtn = el.querySelector<HTMLButtonElement>('.item-delete-inline');
+    if (delBtn) {
+        delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await performDeleteCapture(captureId, '__colmap__', el, role);
+        });
+    }
+}
+
+async function selectColmapCapture(captureId: string, info: PointCloudsResponse, el: HTMLButtonElement, createdAt: string): Promise<void> {
+    const pcKey = `${captureId}/__colmap__`;
+    if (selectedPcKey === pcKey) return;
+
+    clearColmapImageCache();
+
+    sessionList.querySelectorAll('.list-item').forEach(item => {
+        item.classList.remove('active');
+        item.classList.remove('has-downloads');
+    });
+    el.classList.add('active');
+    selectedPcKey = pcKey;
+    activeListItemEl = el;
+
+    if (window.innerWidth <= 768) {
+        sidebarEl.classList.add('collapsed');
+        toggleBtn.textContent = '›';
+    }
+
+    itemDownloadsSection.classList.remove('open');
+    if (itemDownloadsSection.parentNode) itemDownloadsSection.parentNode.removeChild(itemDownloadsSection);
+    dlSlotPly.classList.remove('open');
+    dlSlotColmap.classList.remove('open');
+    dlSlotMesh.classList.remove('open');
+    dlSlotShare.classList.remove('open');
+
+    prefetchedDownloadBuffer = null;
+    lastLoadedBuffer = null;
+    lastDownloadPc = null;
+
+    await updateDownloadButtonsColmap(captureId, info, createdAt);
+
+    viewerEmpty.classList.add('hidden');
+    viewerProgress.textContent = 'Loading cameras…';
+    viewerLoading.classList.remove('hidden');
+
+    try {
+        const res = await fetch(`/api/get-colmap-poses?capture_id=${encodeURIComponent(captureId)}`);
+        if (!res.ok) throw new Error(`Failed to fetch COLMAP poses: ${res.status}`);
+        const data = await res.json() as { cameras: ColmapCameraData[] };
+        if (selectedPcKey !== pcKey) return;
+
+        const tooltip = document.getElementById('colmap-tooltip')!;
+        let tooltipCaptureId = captureId;
+
+        await loadColmapCameras(data.cameras, (cam, x, y, pos, quat) => {
+
+            if (!cam) {
+                tooltip.classList.remove('visible');
+                return;
+            }
+            const idx = data.cameras.indexOf(cam);
+
+            let poseHtml = '';
+            if (pos && quat) {
+                const f = (v: number) => v.toFixed(3);
+                const { x: qx, y: qy, z: qz, w: qw } = quat;
+                const m13 = 2 * (qx * qz + qw * qy);
+                const m23 = 2 * (qy * qz - qw * qx);
+                const m33 = 1 - 2 * (qx * qx + qy * qy);
+                const m12 = 2 * (qx * qy - qw * qz);
+                const m11 = 1 - 2 * (qy * qy + qz * qz);
+                const ry = Math.asin(Math.max(-1, Math.min(1, m13)));
+                const rx = Math.abs(m13) < 0.9999999 ? Math.atan2(-m23, m33) : Math.atan2(2*(qx*qw+qy*qz), 1-2*(qy*qy+qz*qz));
+                const rz = Math.abs(m13) < 0.9999999 ? Math.atan2(-m12, m11) : 0;
+                const toDeg = (r: number) => (r * 180 / Math.PI).toFixed(1);
+                poseHtml = `
+                <div class="tooltip-pose">
+                    <span class="pose-label">pos</span>
+                    <span class="pose-val"><span class="pose-x">x&nbsp;${f(pos.x)}</span> <span class="pose-y">y&nbsp;${f(pos.y)}</span> <span class="pose-z">z&nbsp;${f(pos.z)}</span></span>
+                    <span class="pose-label">rot</span>
+                    <span class="pose-val"><span class="pose-x">x&nbsp;${toDeg(rx)}°</span> <span class="pose-y">y&nbsp;${toDeg(ry)}°</span> <span class="pose-z">z&nbsp;${toDeg(rz)}°</span></span>
+                </div>`;
+            }
+
+            tooltip.innerHTML = `
+                <div class="tooltip-preview">
+                    <div class="tooltip-spinner"></div>
+                    <img class="tooltip-img hidden" alt="${cam.name}" />
+                </div>
+                <div class="tooltip-meta">${cam.name} &nbsp;·&nbsp; ${idx + 1} / ${data.cameras.length}</div>
+                ${poseHtml}
+            `;
+
+            const img = tooltip.querySelector<HTMLImageElement>('.tooltip-img')!;
+            const spinner = tooltip.querySelector<HTMLElement>('.tooltip-spinner')!;
+
+            // Use cached blob URL if available, otherwise fetch and cache
+            const cacheKey = `${tooltipCaptureId}/${cam.name}`;
+            if (colmapImageCache.has(cacheKey)) {
+                img.src = colmapImageCache.get(cacheKey)!;
+                spinner.style.display = 'none';
+                img.classList.remove('hidden');
+            } else {
+                img.onload = () => { spinner.style.display = 'none'; img.classList.remove('hidden'); };
+                img.onerror = () => { spinner.style.display = 'none'; };
+                getColmapImageUrl(tooltipCaptureId, cam.name)
+                    .then(url => { if (img.isConnected) img.src = url; })
+                    .catch(() => { if (img.isConnected) spinner.style.display = 'none'; });
+            }
+
+            tooltip.style.left = `${x + 16}px`;
+            tooltip.style.top  = `${y - 12}px`;
+            tooltip.classList.add('visible');
+        }, (percent) => {
+            viewerProgress.textContent = `Loading cameras… ${percent}%`;
+        });
+        showToast('COLMAP cameras loaded.', 'success');
+    } catch (err) {
+        selectedPcKey = null;
+        el.classList.remove('active');
+        showToast(`Failed to load COLMAP cameras: ${err instanceof Error ? err.message : err}`, 'error');
+    } finally {
+        viewerLoading.classList.add('hidden');
+    }
+}
+
+async function updateDownloadButtonsColmap(captureId: string, info: PointCloudsResponse, createdAt: string): Promise<void> {
+    lastDownloadCaptureId = captureId;
+    lastDownloadCreatedAt = createdAt;
+    colmapAvailable = !!info.colmap_url;
+    colmapSizeBytes = info.colmap_size_bytes ?? null;
+    meshAvailable = false;
+    meshSizeBytes = null;
+
+    if (!colmapAvailable) return;
+
+    const activeItem = sessionList.querySelector<HTMLButtonElement>('.list-item.active');
+    if (activeItem && !activeItem.classList.contains('has-downloads')) {
+        activeItem.classList.add('has-downloads');
+        activeItem.insertAdjacentElement('afterend', itemDownloadsSection);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            itemDownloadsSection.classList.add('open');
+        }));
+    } else {
+        itemDownloadsSection.classList.add('open');
+    }
+
+    dlSlotPly.classList.remove('open');
+    dlSlotMesh.classList.remove('open');
+
+    const colmapMB = colmapSizeBytes ? (colmapSizeBytes / (1024 * 1024)).toFixed(0) : '?';
+    (downloadColmapBtn as HTMLButtonElement).textContent = `⤓ COLMAP (${colmapMB} MB)`;
+    dlSlotColmap.classList.add('open');
+
+    if (isLoggedIn) dlSlotShare.classList.add('open');
+    else dlSlotShare.classList.remove('open');
+}
+
 function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string, createdAt: string): void {
     el.classList.remove('is-skeleton');
     el.disabled = false;
@@ -392,7 +642,7 @@ function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved:
     el.innerHTML = `
     <div class="item-content">
       <div class="item-title">${formatCaptureDate(createdAt)}</div>
-      <div class="item-meta">${sizeMB} MB</div>
+      <div class="item-meta">Pointcloud · ${sizeMB} MB</div>
     </div>
     ${deleteBtn}
     <span class="item-status-icon${isCached ? ' cached' : ''}" title="${isCached ? 'Cached locally' : 'Not cached'}">${isCached ? SVG_CACHED : SVG_CLOUD}</span>
@@ -426,9 +676,15 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
         if (selectedPcKey === pcKey) {
             selectedPcKey = null;
             activeListItemEl = null;
-            unloadPointCloud();
-            viewerEmpty.classList.remove('hidden');
-            pointSizeControl.classList.add('hidden');
+            if (viewFilename !== '__colmap__') {
+                unloadPointCloud();
+                viewerEmpty.classList.remove('hidden');
+                pointSizeControl.classList.add('hidden');
+            } else {
+                unloadColmapCameras();
+                clearColmapImageCache();
+                document.getElementById('colmap-tooltip')?.classList.remove('visible');                viewerEmpty.classList.remove('hidden');
+            }
             setStatus('');
         }
         itemDownloadsSection.classList.remove('open');
@@ -455,6 +711,9 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
     const pc = resolved.view;
     const pcKey = `${captureId}/${pc.filename}`;
     if (selectedPcKey === pcKey) return;
+
+    // Clear cached COLMAP images when leaving a colmap capture
+    clearColmapImageCache();
 
     sessionList.querySelectorAll('.list-item').forEach((item) => {
         item.classList.remove('active');

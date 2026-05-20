@@ -40,7 +40,7 @@ export const GET: APIRoute = async ({request}) => {
 
     try {
         const upstream = await fetch(
-            `${baseUrl}/captures/${encodeURIComponent(captureId)}/pointclouds/mesh.glb`,
+            `${baseUrl}/captures/${encodeURIComponent(captureId)}/files/mesh.glb`,
             {headers: {'X-API-Key': apiKey}},
         );
 

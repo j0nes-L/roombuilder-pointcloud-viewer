@@ -22,7 +22,7 @@ interface PointCloudsResponse {
     pointclouds: PointCloudInfo[];
     chunks: PointCloudInfo[];
     draco_chunks: PointCloudInfo[];
-    colmap_available?: boolean;
+    isColmap?: boolean;
     colmap_url?: string | null;
     colmap_size_bytes?: number | null;
 }
@@ -36,6 +36,8 @@ interface CaptureOverviewEntry extends CaptureListItem {
     pointclouds_info: PointCloudsResponse | null;
     mesh_info: MeshInfo;
     role: string;
+    upstream_status?: number | null;
+    upstream_error?: string | null;
 }
 
 const FANOUT_CONCURRENCY = 16;
@@ -85,36 +87,35 @@ export const GET: APIRoute = async ({request}) => {
             const role = entry.role;
             const created_at = entry.created_at;
 
-            const pointcloudsP = (async (): Promise<PointCloudsResponse | null> => {
+            const pointcloudsP = (async (): Promise<{data: PointCloudsResponse | null; status: number | null; error: string | null}> => {
                 try {
-                    const r = await fetch(`${baseUrl}/captures/${id}/pointclouds`, {
-                        headers: {'X-API-Key': apiKey},
-                    });
-                    if (!r.ok) return null;
-                    return await r.json() as PointCloudsResponse;
-                } catch {
-                    return null;
+                    const url = `${baseUrl}/captures/${id}/files`;
+                    const r = await fetch(url, {headers: {'X-API-Key': apiKey}});
+                    if (!r.ok) {
+                        const text = await r.text().catch(() => '');
+                        console.warn(`[overview] upstream ${r.status} for capture ${entry.capture_id}: ${text.slice(0, 200)}`);
+                        return {data: null, status: r.status, error: text.slice(0, 200) || null};
+                    }
+                    const data = await r.json() as PointCloudsResponse;
+                    return {data, status: r.status, error: null};
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.warn(`[overview] fetch failed for capture ${entry.capture_id}: ${msg}`);
+                    return {data: null, status: null, error: msg};
                 }
             })();
 
             const meshP = (async (): Promise<MeshInfo> => {
-                const meshUrl = `${baseUrl}/captures/${id}/pointclouds/mesh.glb`;
+                const meshUrl = `${baseUrl}/captures/${id}/files/mesh.glb`;
                 try {
-                    const head = await fetch(meshUrl, {
-                        method: 'HEAD',
-                        headers: {'X-API-Key': apiKey},
-                    });
+                    const head = await fetch(meshUrl, {method: 'HEAD', headers: {'X-API-Key': apiKey}});
                     if (head.status === 405 || head.status === 501) {
                         const range = await fetch(meshUrl, {
                             method: 'GET',
                             headers: {'X-API-Key': apiKey, Range: 'bytes=0-0'},
                         });
-                        try {
-                            range.body?.cancel();
-                        } catch {}
-                        if (!range.ok && range.status !== 206) {
-                            return {available: false, size_bytes: null};
-                        }
+                        try { range.body?.cancel(); } catch {}
+                        if (!range.ok && range.status !== 206) return {available: false, size_bytes: null};
                         const cr = range.headers.get('Content-Range');
                         let size: number | null = null;
                         if (cr) {
@@ -123,9 +124,7 @@ export const GET: APIRoute = async ({request}) => {
                         }
                         return {available: true, size_bytes: size};
                     }
-                    if (!head.ok) {
-                        return {available: false, size_bytes: null};
-                    }
+                    if (!head.ok) return {available: false, size_bytes: null};
                     const cl = head.headers.get('Content-Length');
                     return {available: true, size_bytes: cl ? parseInt(cl, 10) : null};
                 } catch {
@@ -133,23 +132,25 @@ export const GET: APIRoute = async ({request}) => {
                 }
             })();
 
-            const [pointclouds_info, mesh_info] = await Promise.all([pointcloudsP, meshP]);
+            const [pcResult, mesh_info] = await Promise.all([pointcloudsP, meshP]);
+
             const captureItem: CaptureOverviewEntry = {
                 id: entry.capture_id,
                 folder: entry.capture_id,
                 raw_images: 0,
                 preprocessed_images: 0,
                 created_at,
-                pointclouds_info,
+                pointclouds_info: pcResult.data,
                 mesh_info,
                 role,
+                upstream_status: pcResult.status,
+                upstream_error: pcResult.error,
             };
             return captureItem;
         });
 
-        const visible = enriched.filter(e => e.pointclouds_info !== null);
 
-        return new Response(JSON.stringify({captures: visible}), {
+        return new Response(JSON.stringify({captures: enriched}), {
             status: 200,
             headers: responseHeaders,
         });

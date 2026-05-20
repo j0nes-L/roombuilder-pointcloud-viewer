@@ -11,13 +11,6 @@ export interface CaptureListItem {
     created_at: string;
 }
 
-export interface CaptureDetail {
-    id: string;
-    folder: string;
-    raw_images: string[];
-    preprocessed_images: string[];
-    pointclouds: string[];
-}
 
 export interface PointCloudInfo {
     filename: string;
@@ -30,7 +23,7 @@ export interface PointCloudsResponse {
     pointclouds: PointCloudInfo[];
     chunks: PointCloudInfo[];
     draco_chunks: PointCloudInfo[];
-    colmap_available?: boolean;
+    isColmap?: boolean;
     colmap_url?: string | null;
     colmap_size_bytes?: number | null;
 }
@@ -51,7 +44,7 @@ export function resolvePointCloud(resp: PointCloudsResponse): ResolvedPointCloud
     return {
         view: ply,
         download: ply,
-        colmap_available: !!resp.colmap_available,
+        colmap_available: !!resp.colmap_url,
         colmap_url: resp.colmap_url || null,
         colmap_size_bytes: resp.colmap_size_bytes || null,
         mesh_available: false,

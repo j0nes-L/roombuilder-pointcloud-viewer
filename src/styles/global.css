@@ -658,6 +658,113 @@ html, body {
     word-break: break-all;
 }
 
+.colmap-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: #8b5cf6;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    margin-right: 6px;
+    vertical-align: -2px;
+    flex-shrink: 0;
+    letter-spacing: 0;
+}
+
+.colmap-tooltip {
+    position: fixed;
+    z-index: 9999;
+    background: rgba(15, 15, 20, 0.92);
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    pointer-events: none;
+    white-space: normal;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    backdrop-filter: blur(8px);
+}
+
+.colmap-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.tooltip-preview {
+    width: 200px;
+    height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.04);
+}
+
+.tooltip-img {
+    width: 200px;
+    height: 150px;
+    object-fit: cover;
+    display: block;
+    border-radius: 6px;
+}
+
+.tooltip-img.hidden {
+    display: none;
+}
+
+.tooltip-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(139,92,246,0.3);
+    border-top-color: #8b5cf6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.tooltip-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.tooltip-pose {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 8px;
+    margin-top: 6px;
+    font-size: 10px;
+    font-family: monospace;
+    color: var(--text-secondary);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 6px;
+}
+
+.pose-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    align-self: center;
+}
+
+.pose-val {
+    display: flex;
+    gap: 8px;
+}
+
+.pose-x { color: #f87171; }   /* red  – X axis */
+.pose-y { color: #86efac; }   /* green – Y axis */
+.pose-z { color: #93c5fd; }   /* blue  – Z axis */
+
 .item-meta {
     font-size: 11px;
     color: var(--text-secondary);

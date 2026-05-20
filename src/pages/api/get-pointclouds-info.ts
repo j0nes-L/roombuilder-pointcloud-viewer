@@ -41,7 +41,7 @@ export const GET: APIRoute = async ({request}) => {
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
     try {
-        const apiUrl = `${baseUrl}/captures/${captureId}/pointclouds`;
+        const apiUrl = `${baseUrl}/captures/${captureId}/files`;
         const response = await fetch(apiUrl, {
             headers: {'X-API-Key': apiKey},
         });
