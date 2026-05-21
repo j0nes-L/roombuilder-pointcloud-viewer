@@ -71,7 +71,7 @@ export const GET: APIRoute = async ({ request }) => {
 
         return new Response(JSON.stringify({ cameras }), {
             status: 200,
-            headers: { ...Object.fromEntries(responseHeaders), 'Content-Type': 'application/json' },
+            headers: { ...Object.fromEntries(responseHeaders), 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
         });
     } catch (err) {
         return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {

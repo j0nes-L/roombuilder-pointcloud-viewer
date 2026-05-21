@@ -4,6 +4,7 @@ import {
     clearPointCloudsCache,
     deleteCapture,
     fetchCapturesOverview,
+    fetchCapturesOverviewSWR,
     fetchColmapZip,
     fetchMeshGlb,
     fetchPointCloudData,
@@ -50,6 +51,8 @@ const pointCloudCache = new Map<string, ArrayBuffer>();
 
 // In-memory cache for COLMAP tooltip images (key: "captureId/imageName" → Blob-URL)
 const colmapImageCache = new Map<string, string>();
+// In-memory cache for COLMAP poses (key: captureId → camera array)
+const colmapPosesCache = new Map<string, ColmapCameraData[]>();
 
 function clearColmapImageCache(): void {
     colmapImageCache.forEach(url => URL.revokeObjectURL(url));
@@ -220,7 +223,7 @@ toggleBtn.addEventListener('click', () => {
 
 refreshBtn.addEventListener('click', () => {
     clearPointCloudsCache();
-    loadSessions();
+    loadSessions(true);
 });
 
 
@@ -301,7 +304,53 @@ initViewer(viewerContainer as HTMLElement);
 viewerInitialised = true;
 loadSessions();
 
-async function loadSessions(): Promise<void> {
+function renderOverview(overview: CaptureOverviewEntry[]): void {
+    if (overview.length === 0) {
+        sessionList.innerHTML = '<div class="empty-state">No captures available.</div>';
+        return;
+    }
+    sessionList.innerHTML = '';
+    overview.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    let rendered = 0;
+    overview.forEach((entry, i) => {
+        const el = renderSkeletonItem(entry.id, entry.created_at);
+        el.style.animationDelay = `${Math.min(i * 25, 400)}ms`;
+        sessionList.appendChild(el);
+        if (!entry.pointclouds_info) {
+            upgradeSkeletonItemPending(el, entry.id, entry.role ?? 'collaborator', entry.created_at, `No data (${(entry as any).upstream_status ?? 'err'})`);
+            rendered++;
+            return;
+        }
+        if (entry.pointclouds_info.isColmap) {
+            upgradeSkeletonItemColmap(el, entry.id, entry.pointclouds_info, entry.role ?? 'collaborator', entry.created_at, entry.owner_display_name ?? null);
+            rendered++;
+            const pcKey = `${entry.id}/__colmap__`;
+            if (selectedPcKey === pcKey) {
+                el.classList.add('active');
+                updateDownloadButtonsColmap(entry.id, entry.pointclouds_info, entry.created_at);
+            }
+            return;
+        }
+        const resolved = resolvePointCloud(entry.pointclouds_info);
+        if (!resolved) {
+            upgradeSkeletonItemPending(el, entry.id, entry.role ?? 'collaborator', entry.created_at, 'Processing…');
+            rendered++;
+            return;
+        }
+        upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator', entry.created_at, entry.owner_display_name ?? null);
+        rendered++;
+        const pcKey = `${entry.id}/${resolved.view.filename}`;
+        if (selectedPcKey === pcKey) {
+            el.classList.add('active');
+            updateDownloadButtons(entry.id, resolved, entry.created_at);
+        }
+    });
+    if (rendered === 0) {
+        sessionList.innerHTML = '<div class="empty-state">No point clouds available.</div>';
+    }
+}
+
+async function loadSessions(forceRefresh = false): Promise<void> {
     itemDownloadsSection.classList.remove('open');
     if (itemDownloadsSection.parentNode) {
         itemDownloadsSection.parentNode.removeChild(itemDownloadsSection);
@@ -317,49 +366,13 @@ async function loadSessions(): Promise<void> {
     sessionList.innerHTML = SPINNER;
     setStatus('');
     try {
-        const overview = await fetchCapturesOverview();
-        if (overview.length === 0) {
-            sessionList.innerHTML = '<div class="empty-state">No captures available.</div>';
-            return;
-        }
-        sessionList.innerHTML = '';
-        overview.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        let rendered = 0;
-        overview.forEach((entry, i) => {
-            const el = renderSkeletonItem(entry.id, entry.created_at);
-            el.style.animationDelay = `${Math.min(i * 25, 400)}ms`;
-            sessionList.appendChild(el);
-            if (!entry.pointclouds_info) {
-                upgradeSkeletonItemPending(el, entry.id, entry.role ?? 'collaborator', entry.created_at, `No data (${(entry as any).upstream_status ?? 'err'})`);
-                rendered++;
-                return;
-            }
-            if (entry.pointclouds_info.isColmap) {
-                upgradeSkeletonItemColmap(el, entry.id, entry.pointclouds_info, entry.role ?? 'collaborator', entry.created_at, entry.owner_display_name ?? null);
-                rendered++;
-                const pcKey = `${entry.id}/__colmap__`;
-                if (selectedPcKey === pcKey) {
-                    el.classList.add('active');
-                    updateDownloadButtonsColmap(entry.id, entry.pointclouds_info, entry.created_at);
-                }
-                return;
-            }
-            const resolved = resolvePointCloud(entry.pointclouds_info);
-            if (!resolved) {
-                upgradeSkeletonItemPending(el, entry.id, entry.role ?? 'collaborator', entry.created_at, 'Processing…');
-                rendered++;
-                return;
-            }
-            upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator', entry.created_at, entry.owner_display_name ?? null);
-            rendered++;
-            const pcKey = `${entry.id}/${resolved.view.filename}`;
-            if (selectedPcKey === pcKey) {
-                el.classList.add('active');
-                updateDownloadButtons(entry.id, resolved, entry.created_at);
-            }
-        });
-        if (rendered === 0) {
-            sessionList.innerHTML = '<div class="empty-state">No point clouds available.</div>';
+        if (forceRefresh) {
+            const overview = await fetchCapturesOverview(true);
+            renderOverview(overview);
+        } else {
+            await fetchCapturesOverviewSWR((overview, fromCache) => {
+                renderOverview(overview);
+            });
         }
     } catch {
         sessionList.innerHTML = '<div class="empty-state">No captures available.</div>';
@@ -519,13 +532,41 @@ async function selectColmapCapture(captureId: string, info: PointCloudsResponse,
     viewerLoading.classList.remove('hidden');
 
     try {
-        const res = await fetch(`/api/get-colmap-poses?capture_id=${encodeURIComponent(captureId)}`);
-        if (!res.ok) throw new Error(`Failed to fetch COLMAP poses: ${res.status}`);
-        const data = await res.json() as { cameras: ColmapCameraData[] };
+        let cameras: ColmapCameraData[];
+        if (colmapPosesCache.has(captureId)) {
+            cameras = colmapPosesCache.get(captureId)!;
+        } else {
+            const res = await fetch(`/api/get-colmap-poses?capture_id=${encodeURIComponent(captureId)}`);
+            if (!res.ok) throw new Error(`Failed to fetch COLMAP poses: ${res.status}`);
+            const data = await res.json() as { cameras: ColmapCameraData[] };
+            cameras = data.cameras;
+            colmapPosesCache.set(captureId, cameras);
+        }
         if (selectedPcKey !== pcKey) return;
+        const data = { cameras };
 
         const tooltip = document.getElementById('colmap-tooltip')!;
         let tooltipCaptureId = captureId;
+
+        // Prefetch first N images in background after poses are loaded
+        const PREFETCH_COUNT = 20;
+        const PREFETCH_CONCURRENCY = 4;
+        const prefetchCameras = data.cameras.slice(0, PREFETCH_COUNT);
+        (async () => {
+            let idx = 0;
+            const workers = Array.from({ length: PREFETCH_CONCURRENCY }, async () => {
+                while (true) {
+                    const i = idx++;
+                    if (i >= prefetchCameras.length || selectedPcKey !== pcKey) return;
+                    const cam = prefetchCameras[i];
+                    const key = `${captureId}/${cam.name}`;
+                    if (!colmapImageCache.has(key)) {
+                        try { await getColmapImageUrl(captureId, cam.name); } catch { /* ignore */ }
+                    }
+                }
+            });
+            await Promise.all(workers);
+        })();
 
         await loadColmapCameras(data.cameras, (cam, x, y, pos, quat) => {
 

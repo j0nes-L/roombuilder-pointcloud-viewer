@@ -63,7 +63,7 @@ export const GET: APIRoute = async ({ request }) => {
             headers: {
                 'Content-Type': 'image/png',
                 'Content-Length': String(data.byteLength),
-                'Cache-Control': 'public, max-age=3600',
+                'Cache-Control': 'public, max-age=86400, immutable',
             },
         });
     } catch (error) {

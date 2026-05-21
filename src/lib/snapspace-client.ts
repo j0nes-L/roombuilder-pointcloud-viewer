@@ -155,13 +155,43 @@ export async function fetchCapturesOverview(forceRefresh = false): Promise<Captu
     const qs = forceRefresh ? '?refresh=1' : '';
     const res = await fetch(`${getApiBase()}/get-captures-overview${qs}`);
     if (!res.ok) throw new Error(`Failed to fetch captures overview: ${res.status}`);
-    const data = await res.json() as { captures: CaptureOverviewEntry[] };
+    const data = await res.json() as { captures: CaptureOverviewEntry[]; fromCache?: boolean };
 
     for (const entry of data.captures) {
         if (entry.pointclouds_info) pointCloudsRespCache.set(entry.id, entry.pointclouds_info);
         if (entry.mesh_info) meshInfoCache.set(entry.id, entry.mesh_info);
     }
     return data.captures;
+}
+
+export async function fetchCapturesOverviewSWR(
+    onUpdate: (entries: CaptureOverviewEntry[], fromCache: boolean) => void,
+): Promise<void> {
+    const res = await fetch(`${getApiBase()}/get-captures-overview`);
+    if (!res.ok) throw new Error(`Failed to fetch captures overview: ${res.status}`);
+    const data = await res.json() as { captures: CaptureOverviewEntry[]; fromCache?: boolean };
+
+    for (const entry of data.captures) {
+        if (entry.pointclouds_info) pointCloudsRespCache.set(entry.id, entry.pointclouds_info);
+        if (entry.mesh_info) meshInfoCache.set(entry.id, entry.mesh_info);
+    }
+    onUpdate(data.captures, !!data.fromCache);
+
+    if (data.fromCache) {
+        (async () => {
+            try {
+                const fresh = await fetch(`${getApiBase()}/get-captures-overview?refresh=1`);
+                if (!fresh.ok) return;
+                const freshData = await fresh.json() as { captures: CaptureOverviewEntry[] };
+                if (JSON.stringify(freshData.captures) === JSON.stringify(data.captures)) return;
+                for (const entry of freshData.captures) {
+                    if (entry.pointclouds_info) pointCloudsRespCache.set(entry.id, entry.pointclouds_info);
+                    if (entry.mesh_info) meshInfoCache.set(entry.id, entry.mesh_info);
+                }
+                onUpdate(freshData.captures, false);
+            } catch {}
+        })();
+    }
 }
 
 const pointCloudsRespCache = new Map<string, PointCloudsResponse>();

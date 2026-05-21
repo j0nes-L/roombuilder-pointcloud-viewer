@@ -43,6 +43,13 @@ interface CaptureOverviewEntry extends CaptureListItem {
 
 const FANOUT_CONCURRENCY = 16;
 
+const OVERVIEW_CACHE_TTL_MS = 30_000;
+interface OverviewCacheEntry {
+    data: CaptureOverviewEntry[];
+    expiresAt: number;
+}
+const overviewCache = new Map<string, OverviewCacheEntry>();
+
 async function mapWithConcurrency<T, R>(
     items: T[],
     limit: number,
@@ -76,6 +83,12 @@ export const GET: APIRoute = async ({request}) => {
     const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
     const user = await requireUser(supabase);
     if (!user) return unauthorizedResponse();
+
+    const forceRefresh = new URL(request.url).searchParams.has('refresh');
+    const cached = overviewCache.get(user.id);
+    if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+        return new Response(JSON.stringify({captures: cached.data, fromCache: true}), {status: 200, headers: responseHeaders});
+    }
 
     const allowedEntries = await listUserCaptures(supabase);
     if (allowedEntries.length === 0) {
@@ -192,6 +205,8 @@ export const GET: APIRoute = async ({request}) => {
             return captureItem;
         });
 
+
+        overviewCache.set(user.id, {data: enriched, expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS});
 
         return new Response(JSON.stringify({captures: enriched}), {
             status: 200,
