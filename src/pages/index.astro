@@ -66,8 +66,11 @@ if (user) {
         <button id="sidebar-toggle" class="sidebar-edge-toggle" title="Toggle sidebar">&#8249;</button>
         <div id="viewer" class="viewer-container">
             <div id="point-size-control" class="point-size-control hidden">
-                <label for="point-size-slider">Size</label>
-                <input id="point-size-slider" type="range" min="0.001" max="0.05" step="0.001" value="0.005"/>
+                <div id="point-count-display" class="point-count-display"></div>
+                <div class="point-size-inner">
+                    <label for="point-size-slider">Size</label>
+                    <input id="point-size-slider" type="range" min="0.001" max="0.05" step="0.001" value="0.005"/>
+                </div>
             </div>
             <div class="viewer-empty">Select a point cloud to view</div>
             <div id="viewer-loading" class="viewer-loading hidden">

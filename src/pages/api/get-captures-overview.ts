@@ -36,6 +36,7 @@ interface CaptureOverviewEntry extends CaptureListItem {
     pointclouds_info: PointCloudsResponse | null;
     mesh_info: MeshInfo;
     role: string;
+    owner_display_name?: string | null;
     upstream_status?: number | null;
     upstream_error?: string | null;
 }
@@ -82,6 +83,47 @@ export const GET: APIRoute = async ({request}) => {
     }
 
     try {
+        const ownerNameMap = new Map<string, string>();
+
+        const ownerNamesResult = await supabase.rpc('get_shared_capture_owner_names');
+        if (!ownerNamesResult.error && ownerNamesResult.data) {
+            for (const row of ownerNamesResult.data as { capture_id: string; display_name: string }[]) {
+                ownerNameMap.set(row.capture_id, row.display_name);
+            }
+        } else {
+            const sharedCaptureIds = allowedEntries
+                .filter(e => e.role !== 'owner')
+                .map(e => e.capture_id);
+
+            if (sharedCaptureIds.length > 0) {
+                const { data: ownerPerms } = await supabase
+                    .from('capture_permissions')
+                    .select('capture_id, user_id')
+                    .in('capture_id', sharedCaptureIds)
+                    .eq('role', 'owner');
+
+                if (ownerPerms && ownerPerms.length > 0) {
+                    const ownerIds = [...new Set(ownerPerms.map((r: { user_id: string }) => r.user_id))];
+                    const { data: profiles } = await supabase
+                        .from('profiles')
+                        .select('id, display_name')
+                        .in('id', ownerIds);
+
+                    const profileMap = new Map<string, string>();
+                    if (profiles) {
+                        for (const p of profiles as { id: string; display_name: string }[]) {
+                            profileMap.set(p.id, p.display_name);
+                        }
+                    }
+
+                    for (const perm of ownerPerms as { capture_id: string; user_id: string }[]) {
+                        const name = profileMap.get(perm.user_id);
+                        if (name) ownerNameMap.set(perm.capture_id, name);
+                    }
+                }
+            }
+        }
+
         const enriched = await mapWithConcurrency(allowedEntries, FANOUT_CONCURRENCY, async (entry) => {
             const id = encodeURIComponent(entry.capture_id);
             const role = entry.role;
@@ -143,6 +185,7 @@ export const GET: APIRoute = async ({request}) => {
                 pointclouds_info: pcResult.data,
                 mesh_info,
                 role,
+                owner_display_name: role !== 'owner' ? (ownerNameMap.get(entry.capture_id) ?? null) : null,
                 upstream_status: pcResult.status,
                 upstream_error: pcResult.error,
             };

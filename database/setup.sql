@@ -127,3 +127,21 @@ $$;
 ALTER FUNCTION public.claim_capture_share(uuid) OWNER TO postgres;
 
 GRANT EXECUTE ON FUNCTION public.claim_capture_share(uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_shared_capture_owner_names()
+RETURNS TABLE(capture_id text, display_name text)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT cp_owner.capture_id, p.display_name
+  FROM capture_permissions cp_me
+  JOIN capture_permissions cp_owner
+    ON cp_owner.capture_id = cp_me.capture_id AND cp_owner.role = 'owner'
+  JOIN profiles p ON p.id = cp_owner.user_id
+  WHERE cp_me.user_id = auth.uid() AND cp_me.role != 'owner';
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_shared_capture_owner_names() TO authenticated;
+
+

@@ -335,7 +335,7 @@ async function loadSessions(): Promise<void> {
                 return;
             }
             if (entry.pointclouds_info.isColmap) {
-                upgradeSkeletonItemColmap(el, entry.id, entry.pointclouds_info, entry.role ?? 'collaborator', entry.created_at);
+                upgradeSkeletonItemColmap(el, entry.id, entry.pointclouds_info, entry.role ?? 'collaborator', entry.created_at, entry.owner_display_name ?? null);
                 rendered++;
                 const pcKey = `${entry.id}/__colmap__`;
                 if (selectedPcKey === pcKey) {
@@ -350,7 +350,7 @@ async function loadSessions(): Promise<void> {
                 rendered++;
                 return;
             }
-            upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator', entry.created_at);
+            upgradeSkeletonItem(el, entry.id, resolved, entry.role ?? 'collaborator', entry.created_at, entry.owner_display_name ?? null);
             rendered++;
             const pcKey = `${entry.id}/${resolved.view.filename}`;
             if (selectedPcKey === pcKey) {
@@ -444,12 +444,13 @@ function upgradeSkeletonItemPending(el: HTMLButtonElement, captureId: string, ro
     }
 }
 
-function upgradeSkeletonItemColmap(el: HTMLButtonElement, captureId: string, info: PointCloudsResponse, role: string, createdAt: string): void {
+function upgradeSkeletonItemColmap(el: HTMLButtonElement, captureId: string, info: PointCloudsResponse, role: string, createdAt: string, ownerDisplayName: string | null = null): void {
     el.classList.remove('is-skeleton');
+    if (ownerDisplayName) el.dataset.ownerDisplayName = ownerDisplayName;
     const colmapReady = !!info.colmap_url;
-    const colmapMB = info.colmap_size_bytes ? (info.colmap_size_bytes / (1024 * 1024)).toFixed(1) : null;
+    const sharedPart = role !== 'owner' && ownerDisplayName ? ` · Created by <strong>${ownerDisplayName}</strong>` : '';
     const metaText = colmapReady
-        ? (colmapMB ? `COLMAP · ${colmapMB} MB` : 'COLMAP · ready')
+        ? `COLMAP${sharedPart}`
         : 'Creating COLMAP .zip…';
     const deleteTitle = role === 'owner' ? 'Delete Capture' : 'Remove from library';
     const deleteBtn = isLoggedIn
@@ -586,7 +587,7 @@ async function selectColmapCapture(captureId: string, info: PointCloudsResponse,
             tooltip.style.top  = `${y - 12}px`;
             tooltip.classList.add('visible');
         }, (percent) => {
-            viewerProgress.textContent = `Loading cameras… ${percent}%`;
+            viewerProgress.textContent = 'Loading cameras…';
         });
         showToast('COLMAP cameras loaded.', 'success');
     } catch (err) {
@@ -630,10 +631,12 @@ async function updateDownloadButtonsColmap(captureId: string, info: PointCloudsR
     else dlSlotShare.classList.remove('open');
 }
 
-function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string, createdAt: string): void {
+function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved: ResolvedPointCloud, role: string, createdAt: string, ownerDisplayName: string | null = null): void {
     el.classList.remove('is-skeleton');
     el.disabled = false;
-    const sizeMB = (resolved.view.size_bytes / (1024 * 1024)).toFixed(1);
+    if (ownerDisplayName) el.dataset.ownerDisplayName = ownerDisplayName;
+    const sharedPart = role !== 'owner' && ownerDisplayName ? ` · Created by <strong>${ownerDisplayName}</strong>` : '';
+    const metaText = `Pointcloud${sharedPart}`;
     const isCached = pointCloudCache.has(`${captureId}/${resolved.view.filename}`);
     const deleteTitle = role === 'owner' ? 'Delete Capture' : 'Remove from library';
     const deleteBtn = isLoggedIn
@@ -642,7 +645,7 @@ function upgradeSkeletonItem(el: HTMLButtonElement, captureId: string, resolved:
     el.innerHTML = `
     <div class="item-content">
       <div class="item-title">${formatCaptureDate(createdAt)}</div>
-      <div class="item-meta">Pointcloud · ${sizeMB} MB</div>
+      <div class="item-meta">${metaText}</div>
     </div>
     ${deleteBtn}
     <span class="item-status-icon${isCached ? ' cached' : ''}" title="${isCached ? 'Cached locally' : 'Not cached'}">${isCached ? SVG_CACHED : SVG_CLOUD}</span>
@@ -680,6 +683,8 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
                 unloadPointCloud();
                 viewerEmpty.classList.remove('hidden');
                 pointSizeControl.classList.add('hidden');
+                const pcd = document.getElementById('point-count-display');
+                if (pcd) pcd.textContent = '';
             } else {
                 unloadColmapCameras();
                 clearColmapImageCache();
@@ -775,16 +780,10 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
 
 
         const count = getPointCount();
-        const countStr = count >= 1_000_000
-            ? `${(count / 1_000_000).toFixed(1)}M points`
-            : count >= 1_000
-                ? `${(count / 1_000).toFixed(0)}K points`
-                : `${count} points`;
-        const metaEl = el.querySelector('.item-meta');
-        if (metaEl) {
-            const sizeMB = (pc.size_bytes / (1024 * 1024)).toFixed(1);
-            metaEl.textContent = `${sizeMB} MB · ${countStr}`;
-        }
+        const countStr = count.toLocaleString('de-DE') + ' Points';
+
+        const pointCountEl = document.getElementById('point-count-display');
+        if (pointCountEl) pointCountEl.textContent = countStr;
 
         pointSizeSlider.min = '0.001';
         pointSizeSlider.max = '0.05';
