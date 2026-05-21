@@ -14,7 +14,6 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
     "astro": "^6.3.1",
-    "fflate": "^0.8.3",
     "js-yaml": "^4.1.1",
     "three": "^0.160.0"
   },

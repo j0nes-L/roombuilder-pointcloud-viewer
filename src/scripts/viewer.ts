@@ -4,8 +4,8 @@ import {PLYLoader} from 'three/addons/loaders/PLYLoader.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 export interface ColmapCameraData {
-    qw: number; qx: number; qy: number; qz: number;
-    tx: number; ty: number; tz: number;
+    px: number; py: number; pz: number;
+    rx: number; ry: number; rz: number; rw: number;
     name: string;
 }
 
@@ -412,17 +412,12 @@ async function loadCamGlbTemplate(): Promise<THREE.Object3D> {
     });
 }
 
-function colmapPoseToThreeJS(
-    qw: number, qx: number, qy: number, qz: number,
-    tx: number, ty: number, tz: number,
+function questPoseToThreeJS(
+    px: number, py: number, pz: number,
+    rx: number, ry: number, rz: number, rw: number,
 ): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
-    const q_wc = new THREE.Quaternion(qx, qy, qz, qw);
-    const q_cw = q_wc.clone().invert();
-    const T = new THREE.Vector3(tx, ty, tz);
-    const C = T.clone().negate().applyQuaternion(q_cw);
-    const position = new THREE.Vector3(C.x, C.y, C.z);
-    const RZ180 = new THREE.Quaternion(0, 0, 1, 0);
-    const quaternion = q_cw.clone().multiply(RZ180);
+    const position = new THREE.Vector3(px, py, -pz);
+    const quaternion = new THREE.Quaternion(-rx, -ry, rz, rw);
     return { position, quaternion };
 }
 
@@ -487,7 +482,7 @@ export async function loadColmapCameras(
     colmapHoveredIndex = -1;
 
     const positions = cameras.map(cam =>
-        colmapPoseToThreeJS(cam.qw, cam.qx, cam.qy, cam.qz, cam.tx, cam.ty, cam.tz)
+        questPoseToThreeJS(cam.px, cam.py, cam.pz, cam.rx, cam.ry, cam.rz, cam.rw)
     );
 
     const bbox = new THREE.Box3();

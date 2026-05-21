@@ -8,7 +8,6 @@ import {
     unauthorizedResponse,
     userHasCaptureAccess,
 } from '../../lib/capture-permissions';
-import { extractFileFromZip } from '../../lib/zip-extract';
 
 export const GET: APIRoute = async ({ request }) => {
     const apiKey = import.meta.env.SNAPSPACE_API_KEY;
@@ -29,7 +28,7 @@ export const GET: APIRoute = async ({ request }) => {
             status: 400, headers: { 'Content-Type': 'application/json' },
         });
     }
-    if (!isValidCaptureId(captureId) || !/^[A-Za-z0-9._-]+$/.test(name)) {
+    if (!isValidCaptureId(captureId) || !/^color_\d+\.png$/.test(name)) {
         return new Response(JSON.stringify({ error: 'Invalid parameter format.' }), {
             status: 400, headers: { 'Content-Type': 'application/json' },
         });
@@ -42,19 +41,23 @@ export const GET: APIRoute = async ({ request }) => {
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
     try {
-        const zipUrl = `${baseUrl}/captures/${encodeURIComponent(captureId)}/files/colmap.zip`;
-        const data = await extractFileFromZip(
-            zipUrl,
-            { 'X-API-Key': apiKey },
-            `images/${name}`,
-        );
+        const imageUrl = `${baseUrl}/captures/${encodeURIComponent(captureId)}/images/${encodeURIComponent(name)}`;
+        const upstream = await fetch(imageUrl, {
+            headers: { 'X-API-Key': apiKey },
+        });
 
-        if (!data) {
-            return new Response(JSON.stringify({ error: 'Image not found in ZIP.' }), {
+        if (upstream.status === 404) {
+            return new Response(JSON.stringify({ error: 'Image not found.' }), {
                 status: 404, headers: { 'Content-Type': 'application/json' },
             });
         }
+        if (!upstream.ok) {
+            return new Response(JSON.stringify({ error: `Upstream error: ${upstream.status}` }), {
+                status: upstream.status, headers: { 'Content-Type': 'application/json' },
+            });
+        }
 
+        const data = await upstream.arrayBuffer();
         return new Response(data, {
             status: 200,
             headers: {
