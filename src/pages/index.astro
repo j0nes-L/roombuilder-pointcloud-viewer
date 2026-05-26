@@ -31,6 +31,10 @@ if (user) {
 <body>
 
 <div class="icons-fixed">
+    <div class="api-status" id="api-status" title="API Status">
+        <span class="api-status-label">Status:</span>
+        <span class="api-status-dot" id="api-status-dot"></span>
+    </div>
     <a href="https://www.meta.com/s/8BSi1EJ8l" target="_blank" rel="noopener noreferrer" class="btn btn-icon-link" title="Meta Quest App" aria-label="Meta Quest App">
         <img src="/icons/meta-icon.svg" width="16" height="16" alt="Meta" class="icon-white"/>
     </a>
@@ -129,6 +133,28 @@ if (user) {
 </script>
 <script src="../scripts/toast.ts"></script>
 <script src="../scripts/app.ts"></script>
+<script is:inline>
+(function() {
+    const dot = document.getElementById('api-status-dot');
+    async function checkHealth() {
+        try {
+            const res = await fetch('/api/health', { cache: 'no-store' });
+            if (res.ok) {
+                dot.style.background = '#22c55e';
+                dot.title = 'API online';
+            } else {
+                dot.style.background = '#eab308';
+                dot.title = 'API degraded';
+            }
+        } catch {
+            dot.style.background = '#ef4444';
+            dot.title = 'API offline';
+        }
+    }
+    checkHealth();
+    setInterval(checkHealth, 30000);
+})();
+</script>
 </body>
 </html>
 
