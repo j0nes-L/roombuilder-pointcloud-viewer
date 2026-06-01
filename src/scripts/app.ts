@@ -48,10 +48,7 @@ const dlProgressColmap = document.getElementById('dl-progress-colmap')!;
 const dlProgressMesh = document.getElementById('dl-progress-mesh')!;
 
 const pointCloudCache = new Map<string, ArrayBuffer>();
-
-// In-memory cache for COLMAP tooltip images (key: "captureId/imageName" → Blob-URL)
 const colmapImageCache = new Map<string, string>();
-// In-memory cache for COLMAP poses (key: captureId → camera array)
 const colmapPosesCache = new Map<string, ColmapCameraData[]>();
 
 function clearColmapImageCache(): void {
@@ -211,6 +208,7 @@ shareBtn.addEventListener('click', async () => {
 
 let viewerInitialised = false;
 let selectedPcKey: string | null = null;
+let loadToken = 0;
 const __ssLoggedIn = (window as unknown as {__SS_LOGGED_IN__?: boolean}).__SS_LOGGED_IN__;
 const ssrValueAvailable = typeof __ssLoggedIn === 'boolean';
 let isLoggedIn = ssrValueAvailable ? __ssLoggedIn! : false;
@@ -548,7 +546,6 @@ async function selectColmapCapture(captureId: string, info: PointCloudsResponse,
         const tooltip = document.getElementById('colmap-tooltip')!;
         let tooltipCaptureId = captureId;
 
-        // Prefetch first N images in background after poses are loaded
         const PREFETCH_COUNT = 20;
         const PREFETCH_CONCURRENCY = 4;
         const prefetchCameras = data.cameras.slice(0, PREFETCH_COUNT);
@@ -758,7 +755,9 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
     const pcKey = `${captureId}/${pc.filename}`;
     if (selectedPcKey === pcKey) return;
 
-    // Clear cached COLMAP images when leaving a colmap capture
+    const myToken = ++loadToken;
+    const isCurrent = () => myToken === loadToken;
+
     clearColmapImageCache();
 
     sessionList.querySelectorAll('.list-item').forEach((item) => {
@@ -800,18 +799,22 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         } else {
             setStatus('Downloading point cloud…');
             buffer = await fetchPointCloudData(captureId, pc.filename, (f) => {
+                if (!isCurrent()) return;
                 if (f > 0) viewerProgress.textContent = `Downloading… ${Math.round(f * 100)} %`;
             }, pc.size_bytes);
             pointCloudCache.set(cacheKey, buffer);
         }
-        if (selectedPcKey !== pcKey) return;
+        if (!isCurrent()) return;
 
         viewerProgress.textContent = 'Parsing…';
         await new Promise(r => setTimeout(r, 50));
+        if (!isCurrent()) return;
         await loadPointCloudFromBuffer(buffer, (msg) => {
+            if (!isCurrent()) return;
             viewerProgress.textContent = msg;
             setStatus(msg);
         });
+        if (!isCurrent()) return;
         lastLoadedBuffer = buffer;
         lastLoadedFilename = pc.filename;
         lastDownloadCaptureId = captureId;
@@ -836,12 +839,15 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         showToast('Successfully loaded capture.', 'success');
         updateItemCacheIcon(el, true);
     } catch (err: unknown) {
+        if (!isCurrent()) return;
         selectedPcKey = null;
         el.classList.remove('active');
         setStatus(`Error: ${err instanceof Error ? err.message : err}`);
     } finally {
-        viewerLoading.classList.add('hidden');
-        setDownloadBusy(false);
+        if (isCurrent()) {
+            viewerLoading.classList.add('hidden');
+            setDownloadBusy(false);
+        }
     }
 }
 
