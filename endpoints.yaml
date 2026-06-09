@@ -1,4 +1,4 @@
 api:
-  base_url: https://api.00224466.xyz
-  prefix: /snapspace-test
+  base_url: https://api.snapspace.cloud
+  prefix: ""
 
