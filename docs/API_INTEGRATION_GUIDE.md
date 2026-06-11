@@ -130,8 +130,8 @@ No `vercel.json` needed for the basic case.
 
 ```yaml
 api:
-  base_url: https://api.00224466.xyz
-  prefix: /snapspace
+  base_url: https://api.snapspace.cloud
+  prefix: ""
 ```
 
 Committed to git. Loaded once per process by `src/lib/endpoint-config.ts`:
@@ -222,7 +222,7 @@ export const GET: APIRoute = async ({ request }) => {
   const captureId = new URL(request.url).searchParams.get('capture_id');
   if (!captureId) return j({ error: 'Missing capture_id.' }, 400);
 
-  const r = await fetch(`${getApiUrl()}/captures/${captureId}/pointclouds`, {
+  const r = await fetch(`${getApiUrl()}/captures/${captureId}/files`, {
     headers: { 'X-API-Key': apiKey },
   });
   if (!r.ok) return j({ error: 'Upstream failed', status: r.status }, r.status);
@@ -263,7 +263,7 @@ short‑lived download URL, then `302` the browser to it.
 
 ```ts
 // src/pages/api/get-mesh.ts (excerpt)
-const path = `Capture_${captureId}/pointclouds/mesh.glb`;
+const path = `${captureId}/files/mesh.glb`;
 const linkRes = await fetch(
   `${baseUrl}/share/get-download-link?path=${encodeURIComponent(path)}`,
   { headers: { 'X-API-Key': apiKey } },

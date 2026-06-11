@@ -206,9 +206,9 @@ await fetch(
 
 ### 3.6 Get a temporary download URL
 
-The web viewer proxy endpoints (`/api/get-pointcloud`, `/api/get-colmap`, `/api/get-mesh`) use `GET /share/get-download-link` (JWT) internally for point cloud downloads, and call `GET /captures/{id}/pointclouds/{filename}` directly (X-API-Key) for colmap and mesh. All proxy endpoints require the user to be logged in and to have a row in `capture_permissions` for that capture.
+The web viewer proxy endpoints (`/api/get-pointcloud`, `/api/get-colmap`, `/api/get-mesh`) use `GET /share/get-download-link` (JWT) internally for point cloud downloads, and call `GET /captures/{id}/files/{filename}` directly (X-API-Key) for colmap and mesh. All proxy endpoints require the user to be logged in and to have a row in `capture_permissions` for that capture.
 
-> **Unity** should use `GET /captures/{id}/pointclouds/{filename}` with `X-API-Key` directly — see section 5.6. The share-link flow is only needed when generating a public URL without an API key.
+> **Unity** should use `GET /captures/{id}/files/{filename}` with `X-API-Key` directly — see section 5.6. The share-link flow is only needed when generating a public URL without an API key.
 
 ---
 
@@ -220,7 +220,7 @@ The Unity app uses plain `UnityWebRequest` calls to the Supabase REST endpoints 
 public static class SnapSpaceConfig {
     public const string SupabaseUrl     = "https://fihmxvcuwozqzaxjmbmj.supabase.co";
     public const string SupabaseAnonKey = "sb_publishable_sMVlOFXChJeRT9Y7PS9p-w_YTjn3Vw8";
-    public const string SnapSpaceApi    = "https://api.00224466.xyz/snapspace-test";
+    public const string SnapSpaceApi    = "https://api.snapspace.cloud";
     public const string SnapSpaceApiKey = "<device-api-key>";
 }
 ```
@@ -527,7 +527,7 @@ public static IEnumerator PollMergeStatus(string captureId,
 }
 ```
 
-`stage` progression: `preparing` → `pointcloud` → `meshing` (only when `create_mesh=true`) → `completed`
+`stage` progression: `preparing` → `pointcloud` → `colmap` → `meshing` (only when `create_mesh=true`) → `completed`
 
 ### 5.6 Download files after merging
 
@@ -537,7 +537,7 @@ All file downloads use `X-API-Key` directly — no share link needed from Unity.
 public static IEnumerator DownloadFile(string captureId, string filename,
     Action<byte[], string> done) {
     using var req = UnityWebRequest.Get(
-        $"{SnapSpaceConfig.SnapSpaceApi}/captures/{captureId}/pointclouds/{filename}");
+        $"{SnapSpaceConfig.SnapSpaceApi}/captures/{captureId}/files/{filename}");
     req.SetRequestHeader("X-API-Key", SnapSpaceConfig.SnapSpaceApiKey);
     yield return req.SendWebRequest();
     if (req.result == UnityWebRequest.Result.Success)
@@ -717,5 +717,12 @@ The following endpoints are now handled by direct Supabase calls:
 | `GET` | `/merging/status` | X-API-Key (device) |
 | `GET` | `/share/get-download-link` | JWT (user) |
 | `GET` | `/share/{token}` | none (one-time token) |
-| `GET` | `/captures/{id}/pointclouds/*` | X-API-Key (device) |
+| `POST` | `/captures/{id}/create-colmap` | X-API-Key (device) |
+| `GET` | `/captures/{id}/colmap-status` | X-API-Key (device) |
+| `GET` | `/captures/{id}/poses` | X-API-Key (device) |
+| `GET` | `/captures/{id}/images` | X-API-Key (device) |
+| `GET` | `/captures/{id}/images/{filename}` | X-API-Key (device) |
+| `GET` | `/captures/{id}/files` | X-API-Key (device) |
+| `GET` | `/captures/{id}/files/{filename}` | X-API-Key (device) |
+| `GET` | `/captures/{id}/files/colmap.zip` | X-API-Key (device) |
 
