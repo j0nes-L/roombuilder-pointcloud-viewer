@@ -1,6 +1,21 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {PLYLoader} from 'three/addons/loaders/PLYLoader.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+export interface ColmapCameraData {
+    px: number; py: number; pz: number;
+    rx: number; ry: number; rz: number; rw: number;
+    name: string;
+}
+
+interface ColmapCamObject {
+    group: THREE.Group;
+    mats: THREE.MeshStandardMaterial[];
+    data: ColmapCameraData;
+    worldPos: THREE.Vector3;
+    worldQuat: THREE.Quaternion;
+}
 
 const DEFAULT_POINT_SIZE = 0.005;
 const BACKGROUND_COLOR = 0x111111;
@@ -26,6 +41,11 @@ let clockDelta = 0;
 const clock = new THREE.Clock();
 let rightMouseDown = false;
 let gridMesh: THREE.Mesh | null = null;
+
+let colmapGroup: THREE.Group | null = null;
+let colmapCamObjects: ColmapCamObject[] = [];
+let colmapHoverCb: ((data: ColmapCameraData | null, x: number, y: number, pos?: THREE.Vector3, quat?: THREE.Quaternion) => void) | null = null;
+let colmapRaycaster: THREE.Raycaster | null = null;
 
 const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
     || (navigator.maxTouchPoints > 0 && window.matchMedia('(pointer: coarse)').matches);
@@ -185,6 +205,7 @@ export async function loadPointCloudFromBuffer(
     buffer: ArrayBuffer,
     onProgress?: (msg: string) => void,
 ): Promise<void> {
+    unloadColmapCameras();
     unloadPointCloud();
     pointSizeMultiplier = 1.0;
 
@@ -285,41 +306,6 @@ export async function loadPointCloudFromBuffer(
     onProgress?.('Point cloud loaded');
 }
 
-function autoAlignGeometry(geometry: THREE.BufferGeometry): void {
-    const posAttr = geometry.getAttribute('position');
-    const arr = posAttr.array as Float32Array;
-    const n = posAttr.count;
-
-    geometry.computeBoundingBox();
-    const bb = geometry.boundingBox!;
-    const cx = (bb.max.x + bb.min.x) / 2;
-    const cy = (bb.max.y + bb.min.y) / 2;
-    const cz = (bb.max.z + bb.min.z) / 2;
-    for (let i = 0; i < n; i++) {
-        arr[i * 3] -= cx;
-        arr[i * 3 + 1] -= cy;
-        arr[i * 3 + 2] -= cz;
-    }
-
-    const step = Math.max(1, Math.floor(n / 50000));
-    let cov_xx = 0, cov_xz = 0, cov_zz = 0;
-    for (let i = 0; i < n; i += step) {
-        const x = arr[i * 3], z = arr[i * 3 + 2];
-        cov_xx += x * x;
-        cov_xz += x * z;
-        cov_zz += z * z;
-    }
-
-    const angle = 0.5 * Math.atan2(2 * cov_xz, cov_xx - cov_zz);
-    const cosA = Math.cos(-angle), sinA = Math.sin(-angle);
-    for (let i = 0; i < n; i++) {
-        const x = arr[i * 3], z = arr[i * 3 + 2];
-        arr[i * 3] = x * cosA - z * sinA;
-        arr[i * 3 + 2] = x * sinA + z * cosA;
-    }
-
-    posAttr.needsUpdate = true;
-}
 
 function updateGrid(radius: number): void {
     if (gridMesh) {
@@ -407,6 +393,215 @@ function animate(): void {
     renderer.render(scene, camera);
 }
 
+
+
+
+let camGlbTemplate: THREE.Object3D | null = null;
+
+async function loadCamGlbTemplate(): Promise<THREE.Object3D> {
+    if (camGlbTemplate) return camGlbTemplate;
+    return new Promise((resolve, reject) => {
+        new GLTFLoader().load('/cam.glb', gltf => {
+            const model = gltf.scene;
+            const bbox = new THREE.Box3().setFromObject(model);
+            const size = bbox.getSize(new THREE.Vector3()).length();
+            if (size > 0) model.scale.setScalar(1 / size);
+            camGlbTemplate = model;
+            resolve(model);
+        }, undefined, reject);
+    });
+}
+
+function questPoseToThreeJS(
+    px: number, py: number, pz: number,
+    rx: number, ry: number, rz: number, rw: number,
+): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
+    const position = new THREE.Vector3(px, py, -pz);
+    const quaternion = new THREE.Quaternion(-rx, -ry, rz, rw);
+    return { position, quaternion };
+}
+
+
+let colmapHoveredIndex = -1;
+
+function setColmapHover(index: number): void {
+    if (index === colmapHoveredIndex) return;
+    colmapHoveredIndex = index;
+    colmapCamObjects.forEach((co, i) => {
+        const active = i === index;
+        const opacity = active ? 1.0 : 0.5;
+        co.mats.forEach(m => { m.opacity = opacity; });
+    });
+}
+
+function onColmapMouseMove(e: MouseEvent): void {
+    if (!colmapGroup || !colmapRaycaster) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    colmapRaycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
+
+    const allMeshes: THREE.Mesh[] = [];
+    const meshToIdx: Map<THREE.Mesh, number> = new Map();
+    colmapCamObjects.forEach((co, i) => {
+        co.group.traverse(c => {
+            if ((c as THREE.Mesh).isMesh) {
+                allMeshes.push(c as THREE.Mesh);
+                meshToIdx.set(c as THREE.Mesh, i);
+            }
+        });
+    });
+
+    const hits = colmapRaycaster.intersectObjects(allMeshes, false);
+    if (hits.length > 0) {
+        const idx = meshToIdx.get(hits[0].object as THREE.Mesh) ?? -1;
+        if (idx >= 0) {
+            setColmapHover(idx);
+            const co = colmapCamObjects[idx];
+            colmapHoverCb?.(co.data, e.clientX, e.clientY, co.worldPos, co.worldQuat);
+            renderer.domElement.style.cursor = 'pointer';
+            return;
+        }
+    }
+    setColmapHover(-1);
+    colmapHoverCb?.(null, e.clientX, e.clientY);
+    renderer.domElement.style.cursor = '';
+}
+
+export async function loadColmapCameras(
+    cameras: ColmapCameraData[],
+    onHover: (data: ColmapCameraData | null, x: number, y: number, pos?: THREE.Vector3, quat?: THREE.Quaternion) => void,
+    onProgress?: (percent: number) => void,
+): Promise<void> {
+    unloadColmapCameras();
+    unloadPointCloud();
+    colmapHoverCb = onHover as typeof colmapHoverCb;
+    colmapRaycaster = new THREE.Raycaster();
+    colmapGroup = new THREE.Group();
+    colmapCamObjects = [];
+    colmapHoveredIndex = -1;
+
+    const positions = cameras.map(cam =>
+        questPoseToThreeJS(cam.px, cam.py, cam.pz, cam.rx, cam.ry, cam.rz, cam.rw)
+    );
+
+    const bbox = new THREE.Box3();
+    positions.forEach(p => bbox.expandByPoint(p.position));
+    const sz = bbox.getSize(new THREE.Vector3());
+    const iconScale = Math.max(sz.x, sz.y, sz.z, 0.5) * 0.01;
+
+    const minY = Math.min(...positions.map(p => p.position.y));
+    if (minY < iconScale * 0.5) {
+        const yShift = iconScale * 0.5 - minY;
+        positions.forEach(p => { p.position.y += yShift; });
+    }
+
+    let glbTemplate: THREE.Object3D | null = null;
+    try { glbTemplate = await loadCamGlbTemplate(); } catch {}
+
+    for (let i = 0; i < cameras.length; i++) {
+        if (onProgress && (i % 50 === 0 || i === cameras.length - 1)) {
+            onProgress(Math.round(((i + 1) / cameras.length) * 100));
+            await new Promise<void>(r => requestAnimationFrame(() => r()));
+        }
+        const { position, quaternion } = positions[i];
+        const group = new THREE.Group();
+        group.position.copy(position);
+        group.quaternion.copy(quaternion);
+
+        const mats: THREE.MeshStandardMaterial[] = [];
+
+        if (glbTemplate) {
+            const clone = glbTemplate.clone(true);
+            clone.scale.setScalar(iconScale);
+            clone.rotateY(Math.PI / 2);
+            clone.traverse(c => {
+                if ((c as THREE.Mesh).isMesh) {
+                    const m = c as THREE.Mesh;
+                    const src = Array.isArray(m.material) ? m.material[0] : m.material;
+                    const mat = (src as THREE.MeshStandardMaterial).clone() as THREE.MeshStandardMaterial;
+                    mat.color = new THREE.Color(0xc8b8ff);
+                    mat.transparent = true;
+                    mat.opacity = 0.5;
+                    mat.depthWrite = false;
+                    m.material = mat;
+                    mats.push(mat);
+                }
+            });
+            group.add(clone);
+        } else {
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xc8b8ff, transparent: true, opacity: 0.5, depthWrite: false,
+            });
+            group.add(new THREE.Mesh(new THREE.BoxGeometry(iconScale, iconScale * 0.65, iconScale * 0.45), mat));
+            mats.push(mat);
+        }
+
+
+        colmapGroup.add(group);
+        colmapCamObjects.push({ group, mats, data: cameras[i], worldPos: position.clone(), worldQuat: quaternion.clone() });
+    }
+
+    scene.add(colmapGroup);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+    ambient.name = '__colmap_ambient__';
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(1, 3, 2);
+    dirLight.name = '__colmap_dir__';
+    scene.add(dirLight);
+
+    if (colmapGroup.children.length > 0) {
+        const box = new THREE.Box3().setFromObject(colmapGroup);
+        const center = box.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(sz.x, sz.y, sz.z, 0.5);
+
+        camera.near = maxDim * 0.0001;
+        camera.far = maxDim * 200;
+        camera.updateProjectionMatrix();
+        flySpeed = maxDim * 0.3;
+
+        controls.target.copy(center);
+        controls.minDistance = 0;
+        controls.maxDistance = maxDim * 20;
+        camera.position.set(center.x, center.y + maxDim * 0.5, center.z + maxDim * 2.5);
+        controls.update();
+        controls.saveState();
+
+        updateGrid(maxDim);
+    }
+
+    renderer.domElement.addEventListener('mousemove', onColmapMouseMove);
+}
+
+
+export function unloadColmapCameras(): void {
+    renderer?.domElement.removeEventListener('mousemove', onColmapMouseMove);
+    if (colmapGroup) {
+        scene.remove(colmapGroup);
+        colmapGroup.traverse(c => {
+            if ((c as THREE.Mesh).isMesh) {
+                (c as THREE.Mesh).geometry?.dispose();
+                const mat = (c as THREE.Mesh).material;
+                if (Array.isArray(mat)) mat.forEach(m => m.dispose());
+                else (mat as THREE.Material)?.dispose();
+            }
+        });
+        colmapGroup = null;
+    }
+    colmapCamObjects = [];
+    colmapHoveredIndex = -1;
+    colmapHoverCb = null;
+    colmapRaycaster = null;
+
+    scene?.children.filter(c => c.name === '__colmap_ambient__' || c.name === '__colmap_dir__')
+        .forEach(c => scene.remove(c));
+
+    renderer?.domElement && (renderer.domElement.style.cursor = '');
+}
+
+
 export function disposeViewer(): void {
     if (animationId !== null) cancelAnimationFrame(animationId);
     window.removeEventListener('resize', onResize);
@@ -491,4 +686,3 @@ function buildMaterial(hasColors: boolean): THREE.Material {
         sizeAttenuation: true,
     });
 }
-

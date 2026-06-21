@@ -1,0 +1,642 @@
+---
+import '../styles/global.css';
+import {createSupabaseServerClient} from '../lib/supabase-server';
+
+const supabase = createSupabaseServerClient(
+    Astro.cookies,
+    Astro.request.headers.get('Cookie') ?? ''
+);
+const {data: {user}} = await supabase.auth.getUser();
+
+let profile: {role: string | null; display_name: string | null} | null = null;
+if (user) {
+    const {data} = await supabase
+        .from('profiles')
+        .select('role, display_name')
+        .eq('id', user.id)
+        .single();
+    profile = data ? {
+        role: data.role,
+        display_name: data.display_name ?? (user.user_metadata?.display_name as string | undefined) ?? null,
+    } : null;
+}
+
+const mode = Astro.url.searchParams.get('mode');
+---
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SnapSpace · Account</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+</head>
+<body class="privacy-page">
+
+<div class="privacy-container">
+    <div class="privacy-header">
+        <a href="/" class="privacy-back">← Back to Viewer</a>
+        <h1>Account</h1>
+    </div>
+
+    <div class="account-content">
+        {user ? (
+            <!-- Logged in view -->
+            <div class="account-card">
+                <div class="account-info">
+                    <div class="account-field">
+                        <span class="account-field-label">Display Name</span>
+                        <span class="account-field-value account-field-value--name">
+                            {profile?.display_name ?? '—'}
+                            <button type="button" id="open-change-name-btn" class="btn btn-icon account-edit-name-btn" title="Change Display Name" aria-label="Change Display Name">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                        </span>
+                    </div>
+                    <div class="account-field">
+                        <span class="account-field-label">Email</span>
+                        <span class="account-field-value">{user.email}</span>
+                    </div>
+                    <div class="account-field">
+                        <span class="account-field-label">Role</span>
+                        <span class="account-field-value">
+                            <span class={`role-badge role-${profile?.role ?? 'viewer'}`}>
+                                {profile?.role ?? 'viewer'}
+                            </span>
+                        </span>
+                    </div>
+                    <p class="account-role-hint">Your role can only be changed by an administrator.</p>
+                </div>
+
+                <div class="account-actions">
+                    <button type="button" id="open-change-pw-btn" class="btn btn-secondary account-action-btn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        Change Password
+                    </button>
+
+                    <button type="button" id="logout-btn" class="btn btn-secondary account-action-btn" data-display-name={profile?.display_name ?? user.email ?? ''}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        ) : (
+            <!-- Not logged in: show tabs -->
+            <div class="account-card">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" id="tab-login" type="button">Login</button>
+                    <button class="auth-tab" id="tab-register" type="button">Register</button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="panel-login" class="auth-panel">
+                    <form id="login-form" autocomplete="on" novalidate>
+                        <div class="form-group">
+                            <label class="login-label" for="login-email">Email</label>
+                            <input id="login-email" type="email" class="login-input" placeholder="you@example.com" autocomplete="email" required/>
+                        </div>
+                        <div class="form-group">
+                            <label class="login-label" for="login-password">Password</label>
+                            <input id="login-password" type="password" class="login-input" placeholder="Password" autocomplete="current-password" required/>
+                        </div>
+                        <div id="login-error" class="login-error hidden"></div>
+                        <button type="submit" id="login-btn" class="btn btn-accent auth-submit-btn" disabled>Login</button>
+                    </form>
+                    <div style="text-align:right; margin-top:10px;">
+                        <button type="button" id="show-forgot-btn" class="link-btn">Forgot password?</button>
+                    </div>
+
+                    <!-- Forgot Password Panel -->
+                    <div id="panel-forgot" class="hidden" style="margin-top:16px; border-top:1px solid var(--border-color); padding-top:16px;">
+                        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">Enter your email address and we'll send you a reset link.</p>
+                        <div id="forgot-success" class="auth-success hidden">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            <span>Reset link sent! Check your email.</span>
+                        </div>
+                        <form id="forgot-form" novalidate>
+                            <div class="form-group">
+                                <label class="login-label" for="forgot-email">Email</label>
+                                <input id="forgot-email" type="email" class="login-input" placeholder="you@example.com" autocomplete="email" required/>
+                            </div>
+                            <div id="forgot-error" class="login-error hidden"></div>
+                            <button type="submit" id="forgot-btn" class="btn btn-accent auth-submit-btn" disabled>Send Reset Link</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Register Form -->
+                <div id="panel-register" class="auth-panel hidden">
+                    <div id="register-success" class="auth-success hidden" style="flex-direction:column; align-items:flex-start; gap:8px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            <span id="register-success-text">Account created!</span>
+                        </div>
+                        <p style="font-size:12px; color:var(--text-secondary); margin-left:30px;">
+                            Please check your email to confirm your account. Redirecting in <strong id="reg-countdown">5</strong>s …
+                        </p>
+                    </div>
+                    <form id="register-form" autocomplete="on" novalidate>
+                        <div class="form-group">
+                            <label class="login-label" for="reg-email">Email</label>
+                            <input id="reg-email" type="email" class="login-input" placeholder="you@example.com" autocomplete="email" required/>
+                        </div>
+                        <div class="form-group">
+                            <label class="login-label" for="reg-display-name">Display Name</label>
+                            <input id="reg-display-name" type="text" class="login-input" placeholder="Your name" autocomplete="name" minlength="3" maxlength="24" required/>
+                        </div>
+                        <div class="form-group">
+                            <label class="login-label" for="reg-password">Password</label>
+                            <input id="reg-password" type="password" class="login-input" placeholder="Min. 6 characters" autocomplete="new-password" required minlength="6"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="login-label" for="reg-password-confirm">Confirm Password</label>
+                            <input id="reg-password-confirm" type="password" class="login-input" placeholder="Repeat password" autocomplete="new-password" required minlength="6"/>
+                        </div>
+                        <div id="register-error" class="login-error hidden"></div>
+                        <button type="submit" id="register-btn" class="btn btn-accent auth-submit-btn" disabled>Create Account</button>
+                    </form>
+                </div>
+            </div>
+        )}
+    </div>
+
+    <footer class="app-footer">
+        <span>&copy; Jonas Ludorf</span>
+        <span class="footer-sep">|</span>
+        <a href="/privacy" class="footer-link">Privacy Policy</a>
+        <span class="footer-sep">|</span>
+        <a href="https://jonasludorf.dev/legal/" class="footer-link">Legal Note</a>
+    </footer>
+</div>
+
+<!-- ── Change Password Modal ──────────────────────────────────────────── -->
+<div id="change-pw-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span class="modal-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Change Password
+            </span>
+            <button type="button" id="close-change-pw-modal" class="btn btn-icon" aria-label="Close" style="width:28px;height:28px;color:var(--text-muted);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:18px;">Choose a new password for your account.</p>
+        <form id="change-pw-form" novalidate>
+            <div class="form-group">
+                <label class="login-label" for="cp-new-password">New Password</label>
+                <input id="cp-new-password" type="password" class="login-input" placeholder="Min. 6 characters" autocomplete="new-password" required minlength="6"/>
+            </div>
+            <div class="form-group">
+                <label class="login-label" for="cp-confirm-password">Confirm Password</label>
+                <input id="cp-confirm-password" type="password" class="login-input" placeholder="Repeat password" autocomplete="new-password" required minlength="6"/>
+            </div>
+            <div id="cp-error" class="login-error hidden"></div>
+            <div class="modal-actions" style="gap:8px;">
+                <button type="button" id="cp-cancel-btn" class="btn btn-secondary" style="height:36px;padding:0 16px;">Cancel</button>
+                <button type="submit" id="cp-submit-btn" class="btn btn-accent" style="height:36px;padding:0 20px;" disabled>Update Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── Change Display Name Modal ──────────────────────────────────────────── -->
+<div id="change-name-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span class="modal-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Change Display Name
+            </span>
+            <button type="button" id="close-change-name-modal" class="btn btn-icon" aria-label="Close" style="width:28px;height:28px;color:var(--text-muted);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:18px;">Choose a new display name shown to others.</p>
+        <form id="change-name-form" novalidate>
+            <div class="form-group">
+                <label class="login-label" for="cn-new-name">New Display Name</label>
+                <input id="cn-new-name" type="text" class="login-input" placeholder="Your name" autocomplete="name" minlength="3" maxlength="24" required/>
+            </div>
+            <div id="cn-error" class="login-error hidden"></div>
+            <div class="modal-actions" style="gap:8px;">
+                <button type="button" id="cn-cancel-btn" class="btn btn-secondary" style="height:36px;padding:0 16px;">Cancel</button>
+                <button type="submit" id="cn-submit-btn" class="btn btn-accent" style="height:36px;padding:0 20px;" disabled>Update Name</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+import {showToast, initToastFromUrl} from '../scripts/toast';
+
+function setError(el: HTMLElement | null, msg: string) {
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+}
+function clearError(el: HTMLElement | null) {
+    if (!el) return;
+    el.textContent = '';
+    el.classList.add('hidden');
+}
+function markField(id: string, isError: boolean) {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return;
+    el.classList.toggle('input-error', isError);
+    if (isError) el.classList.remove('input-match');
+}
+function markMatch(id: string, ok: boolean) {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return;
+    el.classList.toggle('input-error', !ok);
+    el.classList.toggle('input-match', ok);
+}
+
+initToastFromUrl();
+
+const tabLogin = document.getElementById('tab-login');
+const tabRegister = document.getElementById('tab-register');
+const panelLogin = document.getElementById('panel-login');
+const panelRegister = document.getElementById('panel-register');
+
+function switchToLogin() {
+    tabLogin?.classList.add('active');
+    tabRegister?.classList.remove('active');
+    panelLogin?.classList.remove('hidden');
+    panelRegister?.classList.add('hidden');
+}
+function switchToRegister() {
+    tabRegister?.classList.add('active');
+    tabLogin?.classList.remove('active');
+    panelRegister?.classList.remove('hidden');
+    panelLogin?.classList.add('hidden');
+}
+tabLogin?.addEventListener('click', switchToLogin);
+tabRegister?.addEventListener('click', switchToRegister);
+
+let regRedirectTimer: ReturnType<typeof setInterval> | null = null;
+let regRedirectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function startRegRedirect() {
+    let s = 5;
+    const countdownEl = document.getElementById('reg-countdown');
+    if (countdownEl) countdownEl.textContent = String(s);
+
+    regRedirectTimer = setInterval(() => {
+        s -= 1;
+        if (countdownEl) countdownEl.textContent = String(s);
+    }, 1000);
+
+    regRedirectTimeout = setTimeout(() => {
+        if (regRedirectTimer) clearInterval(regRedirectTimer);
+        window.location.href = '/?toast=info&msg=' + encodeURIComponent('Mail confirmation pending… Please check your inbox!');
+    }, 5000);
+}
+
+function cancelRegRedirect() {
+    if (regRedirectTimer) { clearInterval(regRedirectTimer); regRedirectTimer = null; }
+    if (regRedirectTimeout) { clearTimeout(regRedirectTimeout); regRedirectTimeout = null; }
+}
+
+tabLogin?.addEventListener('click', cancelRegRedirect);
+
+const loginForm = document.getElementById('login-form') as HTMLFormElement | null;
+const loginError = document.getElementById('login-error');
+const loginBtn = document.getElementById('login-btn') as HTMLButtonElement | null;
+const loginEmailEl = document.getElementById('login-email') as HTMLInputElement | null;
+const loginPasswordEl = document.getElementById('login-password') as HTMLInputElement | null;
+
+function updateLoginBtn() {
+    if (loginBtn) loginBtn.disabled = !(loginEmailEl?.value.trim() && loginPasswordEl?.value);
+}
+loginEmailEl?.addEventListener('input', () => { markField('login-email', false); clearError(loginError); updateLoginBtn(); });
+loginPasswordEl?.addEventListener('input', () => { markField('login-password', false); clearError(loginError); updateLoginBtn(); });
+
+loginForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = loginEmailEl?.value.trim() ?? '';
+    const password = loginPasswordEl?.value ?? '';
+    let hasError = false;
+    if (!email) { markField('login-email', true); hasError = true; }
+    if (!password) { markField('login-password', true); hasError = true; }
+    if (hasError) { setError(loginError, 'Please fill in all fields.'); return; }
+
+    clearError(loginError);
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = '…'; }
+    try {
+        const res = await fetch('/api/auth/supabase-login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password}),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            const msg = data.error ?? 'Login failed.';
+            setError(loginError, msg);
+            if (/not confirmed/i.test(msg)) {
+                markField('login-email', true);
+                showToast('Please confirm your email address first. Check your inbox.', 'error', 7000);
+            } else if (/invalid.*credential|wrong.*password|user.*not.*found|invalid login/i.test(msg)) {
+                markField('login-email', true);
+                markField('login-password', true);
+                showToast('Incorrect email or password.', 'error');
+            } else {
+                showToast(msg, 'error');
+            }
+        } else {
+            const nextParam = new URLSearchParams(window.location.search).get('next');
+            const safeNext = nextParam && /^\/[A-Za-z0-9_\-\/?=&.%]*$/.test(nextParam) ? nextParam : null;
+            if (safeNext) {
+                window.location.href = safeNext;
+            } else {
+                window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Welcome back, ${data.display_name ?? email}!`);
+            }
+        }
+    } catch {
+        setError(loginError, 'Network error. Please try again.');
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'Login'; updateLoginBtn(); }
+    }
+});
+
+const registerForm = document.getElementById('register-form') as HTMLFormElement | null;
+const registerError = document.getElementById('register-error');
+const registerBtn = document.getElementById('register-btn') as HTMLButtonElement | null;
+const regEmailEl = document.getElementById('reg-email') as HTMLInputElement | null;
+const regNameEl = document.getElementById('reg-display-name') as HTMLInputElement | null;
+const regPasswordEl = document.getElementById('reg-password') as HTMLInputElement | null;
+const regConfirmEl = document.getElementById('reg-password-confirm') as HTMLInputElement | null;
+
+function updateRegisterBtn() {
+    if (registerBtn) registerBtn.disabled = !(
+        regEmailEl?.value.trim() && regNameEl?.value.trim() &&
+        regPasswordEl?.value && regConfirmEl?.value
+    );
+}
+function checkPasswordMatch() {
+    const pw = regPasswordEl?.value ?? '', c = regConfirmEl?.value ?? '';
+    if (c) markMatch('reg-password-confirm', pw === c);
+}
+regEmailEl?.addEventListener('input', () => { markField('reg-email', false); clearError(registerError); updateRegisterBtn(); });
+regNameEl?.addEventListener('input', () => { markField('reg-display-name', false); clearError(registerError); updateRegisterBtn(); });
+regPasswordEl?.addEventListener('input', () => { markField('reg-password', false); clearError(registerError); checkPasswordMatch(); updateRegisterBtn(); });
+regConfirmEl?.addEventListener('input', () => { checkPasswordMatch(); clearError(registerError); updateRegisterBtn(); });
+
+registerForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = regEmailEl?.value.trim() ?? '';
+    const display_name = regNameEl?.value.trim() ?? '';
+    const password = regPasswordEl?.value ?? '';
+    const passwordConfirm = regConfirmEl?.value ?? '';
+    let hasError = false;
+    if (!email) { markField('reg-email', true); hasError = true; }
+    if (!display_name) { markField('reg-display-name', true); hasError = true; }
+    if (!password) { markField('reg-password', true); hasError = true; }
+    if (!passwordConfirm) { markField('reg-password-confirm', true); hasError = true; }
+    if (hasError) { setError(registerError, 'Please fill in all fields.'); return; }
+    if (password !== passwordConfirm) { markMatch('reg-password-confirm', false); setError(registerError, 'Passwords do not match.'); return; }
+    if (password.length < 6) { markField('reg-password', true); setError(registerError, 'Password must be at least 6 characters.'); return; }
+    if (display_name.length < 3 || display_name.length > 24) { markField('reg-display-name', true); setError(registerError, 'Display name must be between 3 and 24 characters.'); return; }
+    if (!/^[\p{L}\p{N} ._-]+$/u.test(display_name)) { markField('reg-display-name', true); setError(registerError, 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'); return; }
+
+    clearError(registerError);
+    if (registerBtn) { registerBtn.disabled = true; registerBtn.textContent = '…'; }
+    try {
+        const res = await fetch('/api/auth/supabase-register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password, display_name}),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            const msg = data.error ?? 'Registration failed.';
+            setError(registerError, msg);
+            if (/email.*already|already.*registered/i.test(msg)) markField('reg-email', true);
+            if (/display name.*taken|taken.*display name/i.test(msg)) markField('reg-display-name', true);
+            showToast(msg, 'error');
+        } else if (data.needsConfirmation) {
+            registerForm.classList.add('hidden');
+            const successEl = document.getElementById('register-success');
+            const successText = document.getElementById('register-success-text');
+            if (successText) successText.textContent = `Account created for ${data.display_name ?? email}!`;
+            successEl?.classList.remove('hidden');
+            startRegRedirect();
+        } else {
+            window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Account created! Welcome, ${data.display_name ?? email}!`);
+        }
+    } catch {
+        setError(registerError, 'Network error. Please try again.');
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        if (registerBtn) { registerBtn.disabled = false; registerBtn.textContent = 'Create Account'; updateRegisterBtn(); }
+    }
+});
+
+const showForgotBtn = document.getElementById('show-forgot-btn') as HTMLButtonElement | null;
+const panelForgot = document.getElementById('panel-forgot');
+const forgotForm = document.getElementById('forgot-form') as HTMLFormElement | null;
+const forgotBtn = document.getElementById('forgot-btn') as HTMLButtonElement | null;
+const forgotError = document.getElementById('forgot-error');
+const forgotSuccess = document.getElementById('forgot-success');
+const forgotEmailEl = document.getElementById('forgot-email') as HTMLInputElement | null;
+
+function updateForgotBtn() {
+    if (forgotBtn) forgotBtn.disabled = !forgotEmailEl?.value.trim();
+}
+forgotEmailEl?.addEventListener('input', () => { markField('forgot-email', false); clearError(forgotError); updateForgotBtn(); });
+showForgotBtn?.addEventListener('click', () => {
+    panelForgot?.classList.toggle('hidden');
+    if (!panelForgot?.classList.contains('hidden')) forgotEmailEl?.focus();
+});
+
+forgotForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = forgotEmailEl?.value.trim() ?? '';
+    if (!email) { markField('forgot-email', true); setError(forgotError, 'Please enter your email.'); return; }
+    clearError(forgotError);
+    if (forgotBtn) { forgotBtn.disabled = true; forgotBtn.textContent = '…'; }
+    if (forgotSuccess) forgotSuccess.classList.add('hidden');
+    try {
+        const res = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email}),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            const msg = data.error ?? 'Failed to send reset email.';
+            setError(forgotError, msg);
+            showToast(msg, 'error');
+        } else {
+            forgotForm.classList.add('hidden');
+            forgotSuccess?.classList.remove('hidden');
+            setTimeout(() => {
+                panelForgot?.classList.add('hidden');
+                switchToLogin();
+                showToast('Reset link sent! Check your email inbox.', 'success', 7000);
+            }, 1500);
+        }
+    } catch {
+        setError(forgotError, 'Network error. Please try again.');
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        if (forgotBtn) { forgotBtn.disabled = false; forgotBtn.textContent = 'Send Reset Link'; updateForgotBtn(); }
+    }
+});
+
+const changePwModal   = document.getElementById('change-pw-modal');
+const changePwForm    = document.getElementById('change-pw-form') as HTMLFormElement | null;
+const cpNewEl         = document.getElementById('cp-new-password') as HTMLInputElement | null;
+const cpConfirmEl     = document.getElementById('cp-confirm-password') as HTMLInputElement | null;
+const cpError         = document.getElementById('cp-error');
+const cpSubmitBtn     = document.getElementById('cp-submit-btn') as HTMLButtonElement | null;
+
+function openChangePwModal() {
+    changePwModal?.classList.remove('hidden');
+    cpNewEl?.focus();
+}
+function closeChangePwModal() {
+    changePwModal?.classList.add('hidden');
+    changePwForm?.reset();
+    clearError(cpError);
+    markField('cp-new-password', false);
+    markField('cp-confirm-password', false);
+    if (cpSubmitBtn) cpSubmitBtn.disabled = true;
+}
+
+function updateCpBtn() {
+    if (cpSubmitBtn) cpSubmitBtn.disabled = !(cpNewEl?.value && cpConfirmEl?.value);
+}
+cpNewEl?.addEventListener('input', () => { markField('cp-new-password', false); clearError(cpError); updateCpBtn(); });
+cpConfirmEl?.addEventListener('input', () => {
+    const pw = cpNewEl?.value ?? '', c = cpConfirmEl?.value ?? '';
+    if (c) markMatch('cp-confirm-password', pw === c);
+    clearError(cpError); updateCpBtn();
+});
+
+document.getElementById('open-change-pw-btn')?.addEventListener('click', openChangePwModal);
+document.getElementById('close-change-pw-modal')?.addEventListener('click', closeChangePwModal);
+document.getElementById('cp-cancel-btn')?.addEventListener('click', closeChangePwModal);
+changePwModal?.addEventListener('click', (e) => { if (e.target === changePwModal) closeChangePwModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChangePwModal(); });
+
+if (new URLSearchParams(window.location.search).get('mode') === 'update-password') {
+    history.replaceState({}, '', window.location.pathname);
+    setTimeout(openChangePwModal, 150);
+}
+
+changePwForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pw = cpNewEl?.value ?? '', pwConfirm = cpConfirmEl?.value ?? '';
+    let hasError = false;
+    if (!pw) { markField('cp-new-password', true); hasError = true; }
+    if (!pwConfirm) { markField('cp-confirm-password', true); hasError = true; }
+    if (hasError) { setError(cpError, 'Please fill in all fields.'); return; }
+    if (pw !== pwConfirm) { markMatch('cp-confirm-password', false); setError(cpError, 'Passwords do not match.'); return; }
+    if (pw.length < 6) { markField('cp-new-password', true); setError(cpError, 'Password must be at least 6 characters.'); return; }
+
+    clearError(cpError);
+    if (cpSubmitBtn) { cpSubmitBtn.disabled = true; cpSubmitBtn.textContent = '…'; }
+    try {
+        const res = await fetch('/api/auth/update-password', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: pw}),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            const msg = data.error ?? 'Failed to update password.';
+            setError(cpError, msg);
+            showToast(msg, 'error');
+        } else {
+            closeChangePwModal();
+            showToast('Password updated successfully!', 'success');
+        }
+    } catch {
+        setError(cpError, 'Network error. Please try again.');
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        if (cpSubmitBtn) { cpSubmitBtn.disabled = false; cpSubmitBtn.textContent = 'Update Password'; updateCpBtn(); }
+    }
+});
+
+const changeNameModal  = document.getElementById('change-name-modal');
+const changeNameForm   = document.getElementById('change-name-form') as HTMLFormElement | null;
+const cnNewEl          = document.getElementById('cn-new-name') as HTMLInputElement | null;
+const cnError          = document.getElementById('cn-error');
+const cnSubmitBtn      = document.getElementById('cn-submit-btn') as HTMLButtonElement | null;
+
+function openChangeNameModal() {
+    changeNameModal?.classList.remove('hidden');
+    cnNewEl?.focus();
+}
+function closeChangeNameModal() {
+    changeNameModal?.classList.add('hidden');
+    changeNameForm?.reset();
+    clearError(cnError);
+    markField('cn-new-name', false);
+    if (cnSubmitBtn) cnSubmitBtn.disabled = true;
+}
+function updateCnBtn() {
+    if (cnSubmitBtn) cnSubmitBtn.disabled = !(cnNewEl?.value.trim());
+}
+cnNewEl?.addEventListener('input', () => { markField('cn-new-name', false); clearError(cnError); updateCnBtn(); });
+
+document.getElementById('open-change-name-btn')?.addEventListener('click', openChangeNameModal);
+document.getElementById('close-change-name-modal')?.addEventListener('click', closeChangeNameModal);
+document.getElementById('cn-cancel-btn')?.addEventListener('click', closeChangeNameModal);
+changeNameModal?.addEventListener('click', (e) => { if (e.target === changeNameModal) closeChangeNameModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChangeNameModal(); });
+
+changeNameForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const display_name = cnNewEl?.value.trim() ?? '';
+    if (!display_name) { markField('cn-new-name', true); setError(cnError, 'Please enter a display name.'); return; }
+    if (display_name.length < 3 || display_name.length > 24) { markField('cn-new-name', true); setError(cnError, 'Display name must be between 3 and 24 characters.'); return; }
+    if (!/^[\p{L}\p{N} ._-]+$/u.test(display_name)) { markField('cn-new-name', true); setError(cnError, 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'); return; }
+
+    clearError(cnError);
+    if (cnSubmitBtn) { cnSubmitBtn.disabled = true; cnSubmitBtn.textContent = '…'; }
+    try {
+        const res = await fetch('/api/auth/update-display-name', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({display_name}),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            const msg = data.error ?? 'Failed to update display name.';
+            setError(cnError, msg);
+            showToast(msg, 'error');
+        } else {
+            closeChangeNameModal();
+            showToast('Display name updated!', 'success');
+            const nameValueEl = document.querySelector('.account-field-value--name');
+            if (nameValueEl) {
+                const textNode = Array.from(nameValueEl.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+                if (textNode) {
+                    textNode.textContent = display_name + ' ';
+                } else {
+                    nameValueEl.insertBefore(document.createTextNode(display_name + ' '), nameValueEl.firstChild);
+                }
+            }
+        }
+    } catch {
+        setError(cnError, 'Network error. Please try again.');
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        if (cnSubmitBtn) { cnSubmitBtn.disabled = false; cnSubmitBtn.textContent = 'Update Name'; updateCnBtn(); }
+    }
+});
+
+document.getElementById('logout-btn')?.addEventListener('click', async () => {
+    const displayName = (document.getElementById('logout-btn') as HTMLButtonElement | null)?.dataset.displayName;
+    await fetch('/api/auth/supabase-logout', {method: 'POST'});
+    window.location.href = '/account?toast=info&msg=' + encodeURIComponent(`Goodbye${displayName ? ', ' + displayName : ''}! You have been logged out.`);
+});
+</script>
+</body>
+</html>
+

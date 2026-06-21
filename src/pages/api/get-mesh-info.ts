@@ -1,5 +1,13 @@
 import type {APIRoute} from 'astro';
 import {getApiUrl} from '../../lib/endpoint-config';
+import {createSupabaseServerClientFromRequest} from '../../lib/supabase-server';
+import {
+    forbiddenResponse,
+    isValidCaptureId,
+    requireUser,
+    unauthorizedResponse,
+    userHasCaptureAccess,
+} from '../../lib/capture-permissions';
 
 export const GET: APIRoute = async ({request}) => {
     const apiKey = import.meta.env.SNAPSPACE_API_KEY;
@@ -19,8 +27,20 @@ export const GET: APIRoute = async ({request}) => {
             headers: {'Content-Type': 'application/json'},
         });
     }
+    if (!isValidCaptureId(captureId)) {
+        return new Response(JSON.stringify({error: 'Invalid capture_id format.'}), {
+            status: 400,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
 
-    const apiUrl = `${baseUrl}/captures/${captureId}/pointclouds/mesh.glb`;
+    const responseHeaders = new Headers();
+    const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
+    const user = await requireUser(supabase);
+    if (!user) return unauthorizedResponse();
+    if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
+
+    const apiUrl = `${baseUrl}/captures/${captureId}/files/mesh.glb`;
 
     const json = (body: Record<string, unknown>, status = 200) =>
         new Response(JSON.stringify(body), {
@@ -29,7 +49,7 @@ export const GET: APIRoute = async ({request}) => {
         });
 
     try {
-        let head = await fetch(apiUrl, {
+        const head = await fetch(apiUrl, {
             method: 'HEAD',
             headers: {'X-API-Key': apiKey},
         });
@@ -42,7 +62,7 @@ export const GET: APIRoute = async ({request}) => {
 
             try {
                 range.body?.cancel();
-            } catch { /* ignore */
+            } catch {
             }
 
             if (!range.ok && range.status !== 206) {

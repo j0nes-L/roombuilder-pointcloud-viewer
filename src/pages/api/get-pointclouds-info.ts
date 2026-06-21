@@ -1,5 +1,13 @@
 import type {APIRoute} from 'astro';
 import {getApiUrl} from '../../lib/endpoint-config';
+import {createSupabaseServerClientFromRequest} from '../../lib/supabase-server';
+import {
+    forbiddenResponse,
+    isValidCaptureId,
+    requireUser,
+    unauthorizedResponse,
+    userHasCaptureAccess,
+} from '../../lib/capture-permissions';
 
 export const GET: APIRoute = async ({request}) => {
     const apiKey = import.meta.env.SNAPSPACE_API_KEY;
@@ -12,22 +20,30 @@ export const GET: APIRoute = async ({request}) => {
         });
     }
 
-    const url = new URL(request.url);
-    const captureId = url.searchParams.get('capture_id');
-
+    const captureId = new URL(request.url).searchParams.get('capture_id');
     if (!captureId) {
         return new Response(JSON.stringify({error: 'Missing capture_id parameter.'}), {
             status: 400,
             headers: {'Content-Type': 'application/json'},
         });
     }
+    if (!isValidCaptureId(captureId)) {
+        return new Response(JSON.stringify({error: 'Invalid capture_id format.'}), {
+            status: 400,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+
+    const responseHeaders = new Headers();
+    const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
+    const user = await requireUser(supabase);
+    if (!user) return unauthorizedResponse();
+    if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
     try {
-        const apiUrl = `${baseUrl}/captures/${captureId}/pointclouds`;
+        const apiUrl = `${baseUrl}/captures/${captureId}/files`;
         const response = await fetch(apiUrl, {
-            headers: {
-                'X-API-Key': apiKey,
-            },
+            headers: {'X-API-Key': apiKey},
         });
 
         if (!response.ok) {
@@ -35,7 +51,7 @@ export const GET: APIRoute = async ({request}) => {
             return new Response(JSON.stringify({
                 error: 'Failed to fetch point clouds info from SnapSpace API.',
                 status: response.status,
-                details: errorText
+                details: errorText,
             }), {
                 status: response.status,
                 headers: {'Content-Type': 'application/json'},
@@ -52,10 +68,11 @@ export const GET: APIRoute = async ({request}) => {
     } catch (error) {
         return new Response(JSON.stringify({
             error: 'An internal error occurred.',
-            details: error instanceof Error ? error.message : String(error)
+            details: error instanceof Error ? error.message : String(error),
         }), {
             status: 500,
             headers: {'Content-Type': 'application/json'},
         });
     }
 };
+

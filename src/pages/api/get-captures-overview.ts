@@ -1,11 +1,14 @@
 import type {APIRoute} from 'astro';
 import {getApiUrl} from '../../lib/endpoint-config';
+import {createSupabaseServerClientFromRequest} from '../../lib/supabase-server';
+import {listUserCaptures, requireUser, unauthorizedResponse} from '../../lib/capture-permissions';
 
 interface CaptureListItem {
     id: string;
     folder: string;
     raw_images: number;
     preprocessed_images: number;
+    created_at: string;
 }
 
 interface PointCloudInfo {
@@ -19,7 +22,7 @@ interface PointCloudsResponse {
     pointclouds: PointCloudInfo[];
     chunks: PointCloudInfo[];
     draco_chunks: PointCloudInfo[];
-    colmap_available?: boolean;
+    isColmap?: boolean;
     colmap_url?: string | null;
     colmap_size_bytes?: number | null;
 }
@@ -32,12 +35,20 @@ interface MeshInfo {
 interface CaptureOverviewEntry extends CaptureListItem {
     pointclouds_info: PointCloudsResponse | null;
     mesh_info: MeshInfo;
+    role: string;
+    owner_display_name?: string | null;
+    upstream_status?: number | null;
+    upstream_error?: string | null;
 }
 
-const CACHE_TTL_MS = 5_000;
-let cache: { ts: number; payload: { captures: CaptureOverviewEntry[] } } | null = null;
-
 const FANOUT_CONCURRENCY = 16;
+
+const OVERVIEW_CACHE_TTL_MS = 30_000;
+interface OverviewCacheEntry {
+    data: CaptureOverviewEntry[];
+    expiresAt: number;
+}
+const overviewCache = new Map<string, OverviewCacheEntry>();
 
 async function mapWithConcurrency<T, R>(
     items: T[],
@@ -68,73 +79,98 @@ export const GET: APIRoute = async ({request}) => {
         });
     }
 
-    const url = new URL(request.url);
-    const noCache = url.searchParams.get('refresh') === '1';
+    const responseHeaders = new Headers({'Content-Type': 'application/json', 'Cache-Control': 'no-store'});
+    const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
+    const user = await requireUser(supabase);
+    if (!user) return unauthorizedResponse();
 
-    if (!noCache && cache && Date.now() - cache.ts < CACHE_TTL_MS) {
-        return new Response(JSON.stringify(cache.payload), {
-            status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Cache': 'HIT',
-                'Cache-Control': 'no-store',
-            },
-        });
+    const forceRefresh = new URL(request.url).searchParams.has('refresh');
+    const cached = overviewCache.get(user.id);
+    if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+        return new Response(JSON.stringify({captures: cached.data, fromCache: true}), {status: 200, headers: responseHeaders});
+    }
+
+    const allowedEntries = await listUserCaptures(supabase);
+    if (allowedEntries.length === 0) {
+        return new Response(JSON.stringify({captures: []}), {status: 200, headers: responseHeaders});
     }
 
     try {
-        const listRes = await fetch(`${baseUrl}/captures`, {
-            headers: {'X-API-Key': apiKey},
-        });
+        const ownerNameMap = new Map<string, string>();
 
-        if (!listRes.ok) {
-            const errorText = await listRes.text();
-            return new Response(JSON.stringify({
-                error: 'Failed to fetch captures from SnapSpace API.',
-                status: listRes.status,
-                details: errorText,
-            }), {
-                status: listRes.status,
-                headers: {'Content-Type': 'application/json'},
-            });
+        const ownerNamesResult = await supabase.rpc('get_shared_capture_owner_names');
+        if (!ownerNamesResult.error && ownerNamesResult.data) {
+            for (const row of ownerNamesResult.data as { capture_id: string; display_name: string }[]) {
+                ownerNameMap.set(row.capture_id, row.display_name);
+            }
+        } else {
+            const sharedCaptureIds = allowedEntries
+                .filter(e => e.role !== 'owner')
+                .map(e => e.capture_id);
+
+            if (sharedCaptureIds.length > 0) {
+                const { data: ownerPerms } = await supabase
+                    .from('capture_permissions')
+                    .select('capture_id, user_id')
+                    .in('capture_id', sharedCaptureIds)
+                    .eq('role', 'owner');
+
+                if (ownerPerms && ownerPerms.length > 0) {
+                    const ownerIds = [...new Set(ownerPerms.map((r: { user_id: string }) => r.user_id))];
+                    const { data: profiles } = await supabase
+                        .from('profiles')
+                        .select('id, display_name')
+                        .in('id', ownerIds);
+
+                    const profileMap = new Map<string, string>();
+                    if (profiles) {
+                        for (const p of profiles as { id: string; display_name: string }[]) {
+                            profileMap.set(p.id, p.display_name);
+                        }
+                    }
+
+                    for (const perm of ownerPerms as { capture_id: string; user_id: string }[]) {
+                        const name = profileMap.get(perm.user_id);
+                        if (name) ownerNameMap.set(perm.capture_id, name);
+                    }
+                }
+            }
         }
 
-        const listData = await listRes.json() as { captures: CaptureListItem[] };
-        const captures = listData.captures ?? [];
+        const enriched = await mapWithConcurrency(allowedEntries, FANOUT_CONCURRENCY, async (entry) => {
+            const id = encodeURIComponent(entry.capture_id);
+            const role = entry.role;
+            const created_at = entry.created_at;
 
-        const enriched = await mapWithConcurrency(captures, FANOUT_CONCURRENCY, async (c) => {
-            const id = encodeURIComponent(c.id);
-
-            const pointcloudsP = (async (): Promise<PointCloudsResponse | null> => {
+            const pointcloudsP = (async (): Promise<{data: PointCloudsResponse | null; status: number | null; error: string | null}> => {
                 try {
-                    const r = await fetch(`${baseUrl}/captures/${id}/pointclouds`, {
-                        headers: {'X-API-Key': apiKey},
-                    });
-                    if (!r.ok) return null;
-                    return await r.json() as PointCloudsResponse;
-                } catch {
-                    return null;
+                    const url = `${baseUrl}/captures/${id}/files`;
+                    const r = await fetch(url, {headers: {'X-API-Key': apiKey}});
+                    if (!r.ok) {
+                        const text = await r.text().catch(() => '');
+                        console.warn(`[overview] upstream ${r.status} for capture ${entry.capture_id}: ${text.slice(0, 200)}`);
+                        return {data: null, status: r.status, error: text.slice(0, 200) || null};
+                    }
+                    const data = await r.json() as PointCloudsResponse;
+                    return {data, status: r.status, error: null};
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.warn(`[overview] fetch failed for capture ${entry.capture_id}: ${msg}`);
+                    return {data: null, status: null, error: msg};
                 }
             })();
 
             const meshP = (async (): Promise<MeshInfo> => {
-                const meshUrl = `${baseUrl}/captures/${id}/pointclouds/mesh.glb`;
+                const meshUrl = `${baseUrl}/captures/${id}/files/mesh.glb`;
                 try {
-                    const head = await fetch(meshUrl, {
-                        method: 'HEAD',
-                        headers: {'X-API-Key': apiKey},
-                    });
+                    const head = await fetch(meshUrl, {method: 'HEAD', headers: {'X-API-Key': apiKey}});
                     if (head.status === 405 || head.status === 501) {
                         const range = await fetch(meshUrl, {
                             method: 'GET',
                             headers: {'X-API-Key': apiKey, Range: 'bytes=0-0'},
                         });
-                        try {
-                            range.body?.cancel();
-                        } catch { /* ignore */ }
-                        if (!range.ok && range.status !== 206) {
-                            return {available: false, size_bytes: null};
-                        }
+                        try { range.body?.cancel(); } catch {}
+                        if (!range.ok && range.status !== 206) return {available: false, size_bytes: null};
                         const cr = range.headers.get('Content-Range');
                         let size: number | null = null;
                         if (cr) {
@@ -143,9 +179,7 @@ export const GET: APIRoute = async ({request}) => {
                         }
                         return {available: true, size_bytes: size};
                     }
-                    if (!head.ok) {
-                        return {available: false, size_bytes: null};
-                    }
+                    if (!head.ok) return {available: false, size_bytes: null};
                     const cl = head.headers.get('Content-Length');
                     return {available: true, size_bytes: cl ? parseInt(cl, 10) : null};
                 } catch {
@@ -153,20 +187,30 @@ export const GET: APIRoute = async ({request}) => {
                 }
             })();
 
-            const [pointclouds_info, mesh_info] = await Promise.all([pointcloudsP, meshP]);
-            return {...c, pointclouds_info, mesh_info} satisfies CaptureOverviewEntry;
+            const [pcResult, mesh_info] = await Promise.all([pointcloudsP, meshP]);
+
+            const captureItem: CaptureOverviewEntry = {
+                id: entry.capture_id,
+                folder: entry.capture_id,
+                raw_images: 0,
+                preprocessed_images: 0,
+                created_at,
+                pointclouds_info: pcResult.data,
+                mesh_info,
+                role,
+                owner_display_name: role !== 'owner' ? (ownerNameMap.get(entry.capture_id) ?? null) : null,
+                upstream_status: pcResult.status,
+                upstream_error: pcResult.error,
+            };
+            return captureItem;
         });
 
-        const payload = {captures: enriched};
-        cache = {ts: Date.now(), payload};
 
-        return new Response(JSON.stringify(payload), {
+        overviewCache.set(user.id, {data: enriched, expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS});
+
+        return new Response(JSON.stringify({captures: enriched}), {
             status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Cache': 'MISS',
-                'Cache-Control': 'no-store',
-            },
+            headers: responseHeaders,
         });
 
     } catch (error) {
@@ -179,3 +223,4 @@ export const GET: APIRoute = async ({request}) => {
         });
     }
 };
+
