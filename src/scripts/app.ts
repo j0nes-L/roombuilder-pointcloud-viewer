@@ -301,7 +301,7 @@ if (window.innerWidth <= 768) {
 initViewer(viewerContainer as HTMLElement);
 viewerInitialised = true;
 if (!isLoggedIn) {
-    viewerEmpty.textContent = 'Please log in!';
+    viewerEmpty.textContent = 'Please log in to use the viewer';
 }
 loadSessions();
 
