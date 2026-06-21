@@ -300,6 +300,9 @@ if (window.innerWidth <= 768) {
 }
 initViewer(viewerContainer as HTMLElement);
 viewerInitialised = true;
+if (!isLoggedIn) {
+    viewerEmpty.textContent = 'Please log in!';
+}
 loadSessions();
 
 function renderOverview(overview: CaptureOverviewEntry[]): void {
