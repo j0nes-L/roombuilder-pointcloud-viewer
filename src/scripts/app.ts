@@ -498,6 +498,7 @@ async function selectColmapCapture(captureId: string, info: PointCloudsResponse,
     if (selectedPcKey === pcKey) return;
 
     clearColmapImageCache();
+    pointSizeControl.classList.add('hidden');
 
     sessionList.querySelectorAll('.list-item').forEach(item => {
         item.classList.remove('active');
