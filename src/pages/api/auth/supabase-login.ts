@@ -32,6 +32,16 @@ export const POST: APIRoute = async ({request}) => {
         });
     }
 
+    if (!data.user.email_confirmed_at) {
+        await supabase.auth.signOut({scope: 'local'});
+        return new Response(JSON.stringify({
+            error: 'Email not confirmed. Please check your inbox and confirm your email address before logging in.',
+        }), {
+            status: 403,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+
     const {data: profile} = await supabase
         .from('profiles')
         .select('display_name')

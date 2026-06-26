@@ -1,10 +1,14 @@
 import type {APIRoute} from 'astro';
+import type {EmailOtpType} from '@supabase/supabase-js';
 import {createSupabaseServerClientFromRequest} from '../../../lib/supabase-server';
 
 export const GET: APIRoute = async ({request}) => {
     const url = new URL(request.url);
     const code = url.searchParams.get('code');
-    const flow = url.searchParams.get('flow') ?? 'signup';
+    const tokenHash = url.searchParams.get('token_hash');
+    const type = url.searchParams.get('type') as EmailOtpType | null;
+    const flow = url.searchParams.get('flow')
+        ?? (type === 'recovery' ? 'recovery' : 'signup');
 
     const buildRedirect = (location: string, extraHeaders?: Headers) => {
         const headers = new Headers(extraHeaders);
@@ -12,7 +16,7 @@ export const GET: APIRoute = async ({request}) => {
         return new Response(null, {status: 302, headers});
     };
 
-    if (!code) {
+    if (!code && !(tokenHash && type)) {
         return buildRedirect(
             `/account?toast=error&msg=${encodeURIComponent('Invalid or missing confirmation link.')}`
         );
@@ -21,7 +25,9 @@ export const GET: APIRoute = async ({request}) => {
     const responseHeaders = new Headers();
     const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
 
-    const {error} = await supabase.auth.exchangeCodeForSession(code);
+    const {error} = tokenHash && type
+        ? await supabase.auth.verifyOtp({type, token_hash: tokenHash})
+        : await supabase.auth.exchangeCodeForSession(code as string);
 
     if (error) {
         const isExpired = /expired|invalid/i.test(error.message);

@@ -1,5 +1,6 @@
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 CREATE POLICY "Users can read own profile"
 ON public.profiles
 FOR SELECT
@@ -15,7 +16,7 @@ BEGIN
   INSERT INTO public.profiles (id, role, display_name, created_at)
   VALUES (
     NEW.id,
-    'viewer',
+    'user',
     COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.email),
     NOW()
   )
@@ -31,7 +32,6 @@ $$;
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
 
 CREATE TABLE IF NOT EXISTS public.capture_permissions (
     capture_id text NOT NULL,

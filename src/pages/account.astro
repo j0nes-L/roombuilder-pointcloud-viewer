@@ -60,8 +60,8 @@ const mode = Astro.url.searchParams.get('mode');
                     <div class="account-field">
                         <span class="account-field-label">Role</span>
                         <span class="account-field-value">
-                            <span class={`role-badge role-${profile?.role ?? 'viewer'}`}>
-                                {profile?.role ?? 'viewer'}
+                            <span class={`role-badge role-${profile?.role ?? 'user'}`}>
+                                {profile?.role ?? 'user'}
                             </span>
                         </span>
                     </div>
@@ -132,7 +132,7 @@ const mode = Astro.url.searchParams.get('mode');
                             <span id="register-success-text">Account created!</span>
                         </div>
                         <p style="font-size:12px; color:var(--text-secondary); margin-left:30px;">
-                            Please check your email to confirm your account. Redirecting in <strong id="reg-countdown">5</strong>s …
+                            Please check your email to confirm your account. Switching to login in <strong id="reg-countdown">5</strong>s …
                         </p>
                     </div>
                     <form id="register-form" autocomplete="on" novalidate>
@@ -271,6 +271,7 @@ function switchToRegister() {
     tabLogin?.classList.remove('active');
     panelRegister?.classList.remove('hidden');
     panelLogin?.classList.add('hidden');
+    resetRegisterPanel();
 }
 tabLogin?.addEventListener('click', switchToLogin);
 tabRegister?.addEventListener('click', switchToRegister);
@@ -278,19 +279,30 @@ tabRegister?.addEventListener('click', switchToRegister);
 let regRedirectTimer: ReturnType<typeof setInterval> | null = null;
 let regRedirectTimeout: ReturnType<typeof setTimeout> | null = null;
 
+function resetRegisterPanel() {
+    cancelRegRedirect();
+    document.getElementById('register-form')?.classList.remove('hidden');
+    document.getElementById('register-success')?.classList.add('hidden');
+    const countdownEl = document.getElementById('reg-countdown');
+    if (countdownEl) countdownEl.textContent = '5';
+}
+
 function startRegRedirect() {
+    cancelRegRedirect();
     let s = 5;
     const countdownEl = document.getElementById('reg-countdown');
     if (countdownEl) countdownEl.textContent = String(s);
 
     regRedirectTimer = setInterval(() => {
         s -= 1;
-        if (countdownEl) countdownEl.textContent = String(s);
+        if (countdownEl) countdownEl.textContent = String(Math.max(s, 0));
+        if (s <= 0 && regRedirectTimer) { clearInterval(regRedirectTimer); regRedirectTimer = null; }
     }, 1000);
 
     regRedirectTimeout = setTimeout(() => {
-        if (regRedirectTimer) clearInterval(regRedirectTimer);
-        window.location.href = '/?toast=info&msg=' + encodeURIComponent('Mail confirmation pending… Please check your inbox!');
+        resetRegisterPanel();
+        switchToLogin();
+        showToast('Account created! Please confirm your email, then log in.', 'info', 7000);
     }, 5000);
 }
 
