@@ -1,0 +1,78 @@
+---
+import '../styles/global.css';
+
+const tokenHash = Astro.url.searchParams.get('token_hash') ?? '';
+const type = Astro.url.searchParams.get('type') ?? 'signup';
+const flow = Astro.url.searchParams.get('flow')
+    ?? (type === 'recovery' ? 'recovery' : 'signup');
+
+const valid = tokenHash.length > 0;
+const isRecovery = flow === 'recovery' || type === 'recovery';
+const heading = isRecovery ? 'Reset your password' : 'Confirm your email';
+const description = isRecovery
+    ? 'Click the button below to continue and set a new password for your account.'
+    : 'Click the button below to confirm your email address and activate your account.';
+const buttonLabel = isRecovery ? 'Continue' : 'Confirm email';
+---
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>SnapSpace · Confirm</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+</head>
+<body class="privacy-page">
+
+<div class="privacy-container">
+    <div class="privacy-header">
+        <a href="/" class="privacy-back">← Back to Viewer</a>
+        <h1>Account</h1>
+    </div>
+
+    <div class="account-content">
+        <div class="account-card" style="text-align:center; display:flex; flex-direction:column; align-items:center; gap:18px;">
+            {valid ? (
+                <>
+                    <div class="account-avatar" style="margin-bottom:0;">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <h2 style="font-size:18px; font-weight:600; color:var(--text-primary);">{heading}</h2>
+                        <p style="font-size:14px; color:var(--text-secondary); max-width:340px; margin:0 auto;">{description}</p>
+                    </div>
+                    <form method="POST" action="/api/auth/confirm" style="width:100%; display:flex; justify-content:center;">
+                        <input type="hidden" name="token_hash" value={tokenHash}/>
+                        <input type="hidden" name="type" value={type}/>
+                        <input type="hidden" name="flow" value={flow}/>
+                        <button type="submit" class="btn btn-accent" style="height:40px; padding:0 28px; font-size:14px;">{buttonLabel}</button>
+                    </form>
+                </>
+            ) : (
+                <>
+                    <div class="account-avatar" style="margin-bottom:0; color:var(--error);">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <h2 style="font-size:18px; font-weight:600; color:var(--text-primary);">Invalid link</h2>
+                        <p style="font-size:14px; color:var(--text-secondary); max-width:340px; margin:0 auto;">This confirmation link is invalid or incomplete. Please request a new one.</p>
+                    </div>
+                    <a href="/account" class="btn btn-accent" style="height:40px; padding:0 28px; font-size:14px; text-decoration:none;">Back to Login</a>
+                </>
+            )}
+        </div>
+    </div>
+
+    <footer class="app-footer">
+        <span>&copy; Jonas Ludorf</span>
+        <span class="footer-sep">|</span>
+        <a href="/privacy" class="footer-link">Privacy Policy</a>
+        <span class="footer-sep">|</span>
+        <a href="https://jonasludorf.dev/legal/" class="footer-link">Legal Note</a>
+    </footer>
+</div>
+
+</body>
+</html>
+

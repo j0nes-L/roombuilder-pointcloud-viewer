@@ -276,7 +276,7 @@ public static IEnumerator SignIn(string email, string password, Action<bool, str
 
 ### 4.2 Sign up
 
-After the user taps the confirmation link they land on the web app (`/api/auth/callback?flow=signup`) and are **not** automatically logged in. They must sign in inside Unity manually afterwards.
+After the user taps the confirmation link they land on the web app's `/confirm` page, tap **Confirm email** (an explicit POST so email link scanners can't burn the one-time token), and are **not** automatically logged in. They must sign in inside Unity manually afterwards.
 
 ```csharp
 public static IEnumerator SignUp(string email, string password, string displayName, Action<bool, string> done) {

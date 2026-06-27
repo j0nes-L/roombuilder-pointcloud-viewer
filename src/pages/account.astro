@@ -169,7 +169,6 @@ const mode = Astro.url.searchParams.get('mode');
     </footer>
 </div>
 
-<!-- ── Change Password Modal ──────────────────────────────────────────── -->
 <div id="change-pw-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
         <div class="modal-header">
@@ -200,7 +199,6 @@ const mode = Astro.url.searchParams.get('mode');
     </div>
 </div>
 
-<!-- ── Change Display Name Modal ──────────────────────────────────────────── -->
 <div id="change-name-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
         <div class="modal-header">
@@ -285,6 +283,13 @@ function resetRegisterPanel() {
     document.getElementById('register-success')?.classList.add('hidden');
     const countdownEl = document.getElementById('reg-countdown');
     if (countdownEl) countdownEl.textContent = '5';
+    (document.getElementById('register-form') as HTMLFormElement | null)?.reset();
+    ['reg-email', 'reg-display-name', 'reg-password', 'reg-password-confirm'].forEach((id) => {
+        document.getElementById(id)?.classList.remove('input-error', 'input-match');
+    });
+    clearError(document.getElementById('register-error'));
+    const regBtnEl = document.getElementById('register-btn') as HTMLButtonElement | null;
+    if (regBtnEl) regBtnEl.disabled = true;
 }
 
 function startRegRedirect() {
