@@ -32,16 +32,21 @@ export const POST: APIRoute = async ({request}) => {
     const responseHeaders = new Headers();
     const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
 
-    const {error} = await supabase.auth.verifyOtp({type, token_hash: tokenHash});
+    let errorMessage: string | null = null;
+    try {
+        const {error} = await supabase.auth.verifyOtp({type, token_hash: tokenHash});
+        if (error) errorMessage = error.message;
+    } catch (err) {
+        errorMessage = err instanceof Error ? err.message : 'Unexpected error during confirmation.';
+    }
 
-    if (error) {
-        const isExpired = /expired|invalid/i.test(error.message);
+    if (errorMessage) {
+        const isExpired = /expired|invalid/i.test(errorMessage);
         const msg = isExpired
             ? 'This link has expired or is invalid. Please request a new one.'
-            : error.message;
-        return buildRedirect(
-            `/account?toast=error&msg=${encodeURIComponent(msg)}`
-        );
+            : errorMessage;
+        const params = new URLSearchParams({type, flow, error: msg});
+        return buildRedirect(`/confirm?${params.toString()}`);
     }
 
     if (flow === 'recovery') {

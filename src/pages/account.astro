@@ -285,7 +285,9 @@ function resetRegisterPanel() {
     if (countdownEl) countdownEl.textContent = '5';
     (document.getElementById('register-form') as HTMLFormElement | null)?.reset();
     ['reg-email', 'reg-display-name', 'reg-password', 'reg-password-confirm'].forEach((id) => {
-        document.getElementById(id)?.classList.remove('input-error', 'input-match');
+        const field = document.getElementById(id) as HTMLInputElement | null;
+        if (field) field.value = '';
+        field?.classList.remove('input-error', 'input-match');
     });
     clearError(document.getElementById('register-error'));
     const regBtnEl = document.getElementById('register-btn') as HTMLButtonElement | null;
@@ -434,6 +436,7 @@ registerForm?.addEventListener('submit', async (e) => {
             if (/display name.*taken|taken.*display name/i.test(msg)) markField('reg-display-name', true);
             showToast(msg, 'error');
         } else if (data.needsConfirmation) {
+            try { sessionStorage.setItem('ss_pending_confirm_email', email); } catch {}
             registerForm.classList.add('hidden');
             const successEl = document.getElementById('register-success');
             const successText = document.getElementById('register-success-text');
