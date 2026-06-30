@@ -6,7 +6,7 @@ import '../styles/global.css';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy · SnapSpace</title>
+    <title>SnapSpace · Privacy Policy</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
     <style>html, body { overflow: auto !important; height: auto !important; }</style>
 </head>
@@ -26,8 +26,6 @@ import '../styles/global.css';
         </ul>
         <p>We kindly ask that you do not scan highly private or sensitive spaces. Try to only share spaces you feel comfortable sharing.</p>
 
-        </ul>
-
         <h2>2. Data Deletion and Your Privacy Rights</h2>
         <p>You have the right to access, correct, or request the deletion of your personal data and spatial scans at any time. We provide this deletion process for all users, irrespective of their region, and we do not charge any fees for fulfilling data deletion requests.</p>
         <p>If you request the deletion of your data, we will promptly remove your specific point cloud scans from the web viewer and securely delete the associated raw sensor data from our servers. We will fulfill all deletion requests unless we are strictly required by law to retain specific data.</p>
@@ -36,7 +34,7 @@ import '../styles/global.css';
         <p>If you have any questions, privacy concerns, or wish to formally request the deletion of your data, please contact me directly via: <a id="contact-mail" href="#" class="footer-link"></a> or open a ticket in our <a href="https://discord.gg/TQBGF292ZP" class="footer-link">Discord</a>.</p>
     </main>
     <footer class="app-footer">
-        <span>&copy; Jonas Ludorf</span>
+        <span>&copy; <a href="https://jonasludorf.dev" target="_blank" rel="noopener noreferrer" class="footer-link">Jonas Ludorf</a></span>
         <span class="footer-sep">|</span>
         <a href="https://jonasludorf.dev/legal/" class="footer-link">Legal Note</a>
     </footer>
@@ -45,9 +43,22 @@ import '../styles/global.css';
     const u = 'contact';
     const d = 'snapspace.cloud';
     const el = document.getElementById('contact-mail');
-    if (el) {
+    if (el instanceof HTMLAnchorElement) {
         el.href = 'mailto:' + u + '@' + d;
         el.textContent = u + '@' + d;
+    }
+
+    // Back-Button: zur vorherigen internen Seite (Startseite oder Viewer) zurückführen
+    const backLink = document.querySelector('.privacy-back');
+    if (backLink) {
+        try {
+            const ref = document.referrer ? new URL(document.referrer) : null;
+            if (ref && ref.origin === location.origin) {
+                const path = ref.pathname.replace(/\/+$/, '') || '/';
+                if (path === '/viewer') backLink.setAttribute('href', '/viewer');
+                else if (path === '/') backLink.setAttribute('href', '/');
+            }
+        } catch {}
     }
 </script>
 </body>

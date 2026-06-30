@@ -190,7 +190,7 @@ shareBtn.addEventListener('click', async () => {
         if (error || !data?.token) {
             throw new Error(error?.message ?? 'Could not create share token.');
         }
-        const shareUrl = `${window.location.origin}/?token=${data.token}`;
+        const shareUrl = `${window.location.origin}/viewer?token=${data.token}`;
         try {
             await navigator.clipboard.writeText(shareUrl);
             showToast('Share link copied to clipboard.', 'success');

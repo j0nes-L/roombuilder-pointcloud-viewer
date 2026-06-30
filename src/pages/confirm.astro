@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import Footer from '../components/Footer.astro';
 
 const tokenHash = Astro.url.searchParams.get('token_hash') ?? '';
 const type = Astro.url.searchParams.get('type') ?? 'signup';
@@ -30,7 +31,7 @@ const errorHeading = isRecovery ? 'Reset link invalid' : 'Confirmation failed';
 
 <div class="privacy-container">
     <div class="privacy-header">
-        <a href="/" class="privacy-back">← Back to Viewer</a>
+        <a href="/viewer" class="privacy-back">← Back to Viewer</a>
         <h1>Account</h1>
     </div>
 
@@ -86,13 +87,7 @@ const errorHeading = isRecovery ? 'Reset link invalid' : 'Confirmation failed';
         </div>
     </div>
 
-    <footer class="app-footer">
-        <span>&copy; Jonas Ludorf</span>
-        <span class="footer-sep">|</span>
-        <a href="/privacy" class="footer-link">Privacy Policy</a>
-        <span class="footer-sep">|</span>
-        <a href="https://jonasludorf.dev/legal/" class="footer-link">Legal Note</a>
-    </footer>
+    <Footer />
 </div>
 
 <script>

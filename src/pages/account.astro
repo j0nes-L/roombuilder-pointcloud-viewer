@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import Footer from '../components/Footer.astro';
 import {createSupabaseServerClient} from '../lib/supabase-server';
 
 const supabase = createSupabaseServerClient(
@@ -35,7 +36,7 @@ const mode = Astro.url.searchParams.get('mode');
 
 <div class="privacy-container">
     <div class="privacy-header">
-        <a href="/" class="privacy-back">← Back to Viewer</a>
+        <a href="/" class="privacy-back">← Back</a>
         <h1>Account</h1>
     </div>
 
@@ -160,13 +161,7 @@ const mode = Astro.url.searchParams.get('mode');
         )}
     </div>
 
-    <footer class="app-footer">
-        <span>&copy; Jonas Ludorf</span>
-        <span class="footer-sep">|</span>
-        <a href="/privacy" class="footer-link">Privacy Policy</a>
-        <span class="footer-sep">|</span>
-        <a href="https://jonasludorf.dev/legal/" class="footer-link">Legal Note</a>
-    </footer>
+    <Footer />
 </div>
 
 <div id="change-pw-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
@@ -369,7 +364,7 @@ loginForm?.addEventListener('submit', async (e) => {
             if (safeNext) {
                 window.location.href = safeNext;
             } else {
-                window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Welcome back, ${data.display_name ?? email}!`);
+                window.location.href = '/viewer?toast=success&msg=' + encodeURIComponent(`Welcome back, ${data.display_name ?? email}!`);
             }
         }
     } catch {
@@ -444,7 +439,7 @@ registerForm?.addEventListener('submit', async (e) => {
             successEl?.classList.remove('hidden');
             startRegRedirect();
         } else {
-            window.location.href = '/?toast=success&msg=' + encodeURIComponent(`Account created! Welcome, ${data.display_name ?? email}!`);
+            window.location.href = '/viewer?toast=success&msg=' + encodeURIComponent(`Account created! Welcome, ${data.display_name ?? email}!`);
         }
     } catch {
         setError(registerError, 'Network error. Please try again.');
@@ -656,6 +651,20 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     await fetch('/api/auth/supabase-logout', {method: 'POST'});
     window.location.href = '/account?toast=info&msg=' + encodeURIComponent(`Goodbye${displayName ? ', ' + displayName : ''}! You have been logged out.`);
 });
+
+// Back-Button: zur vorherigen internen Seite (Startseite oder Viewer) zurückführen
+(() => {
+    const backLink = document.querySelector('.privacy-back');
+    if (!backLink) return;
+    try {
+        const ref = document.referrer ? new URL(document.referrer) : null;
+        if (ref && ref.origin === location.origin) {
+            const path = ref.pathname.replace(/\/+$/, '') || '/';
+            if (path === '/viewer') backLink.setAttribute('href', '/viewer');
+            else if (path === '/') backLink.setAttribute('href', '/');
+        }
+    } catch {}
+})();
 </script>
 </body>
 </html>

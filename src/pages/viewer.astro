@@ -1,0 +1,149 @@
+---
+import '../styles/global.css';
+import Footer from '../components/Footer.astro';
+import {createSupabaseServerClient} from '../lib/supabase-server';
+
+const supabase = createSupabaseServerClient(
+    Astro.cookies,
+    Astro.request.headers.get('Cookie') ?? ''
+);
+const {data: {user}} = await supabase.auth.getUser();
+
+let displayName: string | null = null;
+if (user) {
+    const {data} = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', user.id)
+        .single();
+    displayName = data?.display_name
+        ?? (user.user_metadata?.display_name as string | undefined)
+        ?? null;
+}
+---
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SnapSpace · Point Cloud Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+</head>
+<body>
+
+<div class="icons-fixed">
+    <div class="api-status" id="api-status" title="API Status">
+        <span class="api-status-label">Status:</span>
+        <span class="api-status-dot" id="api-status-dot"></span>
+    </div>
+    <a href="/account" class={`btn ${user ? 'btn-account-user' : 'btn-account-login'}`} title="Account" aria-label="Account">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+        </svg>
+        {user ? (displayName ?? user.email ?? 'Account') : 'LOGIN'}
+    </a>
+</div>
+
+<div id="app-screen" class="app-layout">
+    <div class="main-area">
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-topbar">
+                <div class="topbar-brand">
+                    <a href="/" class="logo" title="Back to home">[SnapSpace]</a>
+                    <span class="topbar-subtitle">Point Cloud Viewer</span>
+                </div>
+                <button id="refresh-btn" class="btn btn-icon" title="Refresh">&#8635;</button>
+            </div>
+            <div class="sidebar-body">
+                <div class="sidebar-section-label">Captures</div>
+                <div id="session-list">
+                    <div class="empty-state">No captures available.</div>
+                </div>
+            </div>
+        </aside>
+        <button id="sidebar-toggle" class="sidebar-edge-toggle" title="Toggle sidebar">&#8249;</button>
+        <div id="viewer" class="viewer-container">
+            <div id="point-size-control" class="point-size-control hidden">
+                <div id="point-count-display" class="point-count-display"></div>
+                <div class="point-size-inner">
+                    <label for="point-size-slider">Size</label>
+                    <input id="point-size-slider" type="range" min="0.001" max="0.05" step="0.001" value="0.005"/>
+                </div>
+            </div>
+            <div class="viewer-empty">Select a point cloud to view</div>
+            <div id="viewer-loading" class="viewer-loading hidden">
+                <div class="spinner-large"></div>
+                <div id="viewer-progress" class="viewer-progress">0 %</div>
+            </div>
+        </div>
+    </div>
+    <Footer />
+</div>
+
+<div id="item-downloads-section" class="item-downloads-section">
+    <div class="item-downloads-inner">
+        <div class="dl-slot" id="dl-slot-ply">
+            <div class="dl-slot-inner">
+                <button id="download-btn" class="btn btn-download">⤓ .ply</button>
+                <div class="dl-progress" id="dl-progress-ply"><div class="dl-progress-fill"></div></div>
+            </div>
+        </div>
+        <div class="dl-slot" id="dl-slot-colmap">
+            <div class="dl-slot-inner">
+                <button id="download-colmap-btn" class="btn btn-download">⤓ COLMAP</button>
+                <div class="dl-progress" id="dl-progress-colmap"><div class="dl-progress-fill"></div></div>
+            </div>
+        </div>
+        <div class="dl-slot" id="dl-slot-mesh">
+            <div class="dl-slot-inner">
+                <button id="download-mesh-btn" class="btn btn-download">⤓ .glb</button>
+                <div class="dl-progress" id="dl-progress-mesh"><div class="dl-progress-fill"></div></div>
+            </div>
+        </div>
+        <div class="dl-slot" id="dl-slot-share">
+            <div class="dl-slot-inner">
+                <button id="share-btn" class="btn btn-download btn-accent">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                    </svg>
+                    Share link
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="colmap-tooltip" class="colmap-tooltip"></div>
+
+<script is:inline define:vars={{loggedIn: !!user}}>
+    window.__SS_LOGGED_IN__ = loggedIn;
+</script>
+<script src="../scripts/toast.ts"></script>
+<script src="../scripts/app.ts"></script>
+<script is:inline>
+(function() {
+    const dot = document.getElementById('api-status-dot');
+    async function checkHealth() {
+        try {
+            const res = await fetch('/api/health', { cache: 'no-store' });
+            if (res.ok) {
+                dot.style.background = '#22c55e';
+                dot.title = 'API online';
+            } else {
+                dot.style.background = '#eab308';
+                dot.title = 'API degraded';
+            }
+        } catch {
+            dot.style.background = '#ef4444';
+            dot.title = 'API offline';
+        }
+    }
+    checkHealth();
+    setInterval(checkHealth, 30000);
+})();
+</script>
+</body>
+</html>
+

@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import Footer from '../components/Footer.astro';
 ---
 <!DOCTYPE html>
 <html lang="de">
@@ -23,7 +24,7 @@ import '../styles/global.css';
             </p>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-            <a href="/" class="btn btn-accent" style="height:36px; padding:0 20px; font-size:13px; text-decoration:none;">
+            <a href="/viewer" class="btn btn-accent" style="height:36px; padding:0 20px; font-size:13px; text-decoration:none;">
                 ← Back to Viewer
             </a>
             <a href="/account" class="btn btn-secondary" style="height:36px; padding:0 20px; font-size:13px; text-decoration:none;">
@@ -32,13 +33,7 @@ import '../styles/global.css';
         </div>
     </div>
 
-    <footer class="app-footer">
-        <span>&copy; Jonas Ludorf</span>
-        <span class="footer-sep">|</span>
-        <a href="/privacy" class="footer-link">Privacy Policy</a>
-        <span class="footer-sep">|</span>
-        <a href="https://jonasludorf.dev/legal/" class="footer-link">Legal Note</a>
-    </footer>
+    <Footer />
 </div>
 
 </body>
