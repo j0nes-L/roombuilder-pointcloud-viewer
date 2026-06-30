@@ -1629,9 +1629,6 @@ body.privacy-page {
     }
 }
 
-/* ── Landing Page ─────────────────────────────────────────────────────── */
-
-
 .landing-layout {
     display: flex;
     flex-direction: column;
@@ -1658,14 +1655,30 @@ body.privacy-page {
     position: absolute;
     inset: 0;
     z-index: 0;
-    background: var(--bg-primary) url('/landing-bg.jpg') center center / cover no-repeat;
+    background:
+        radial-gradient(120% 85% at 50% 32%, rgba(108, 92, 231, 0.12) 0%, rgba(13, 13, 15, 0) 58%),
+        var(--bg-primary);
+}
+
+.landing-points {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    pointer-events: none;
+    filter: blur(1px);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 80%, transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 80%, transparent 100%);
+    will-change: opacity, transform;
 }
 
 .landing-bg-overlay {
     position: absolute;
     inset: 0;
     z-index: 0;
-    background: linear-gradient(180deg, rgba(13, 13, 15, 0.5) 0%, rgba(13, 13, 15, 0.62) 55%, rgba(13, 13, 15, 0.95) 100%);
+    background: linear-gradient(180deg, rgba(13, 13, 15, 0.18) 0%, rgba(13, 13, 15, 0.38) 55%, rgba(13, 13, 15, 0.92) 100%);
 }
 
 .landing-hero-content {
