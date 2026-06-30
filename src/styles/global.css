@@ -998,6 +998,14 @@ html, body {
     margin-bottom: 3px;
 }
 
+.point-size-control.count-only .point-size-inner {
+    display: none;
+}
+
+.point-size-control.count-only .point-count-display {
+    margin-bottom: 0;
+}
+
 .point-size-control label {
     font-size: 12px;
     font-weight: 600;

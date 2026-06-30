@@ -631,6 +631,11 @@ async function selectColmapCapture(captureId: string, info: PointCloudsResponse,
         }, (percent) => {
             viewerProgress.textContent = 'Loading cameras…';
         });
+        const pictureCount = data.cameras.length;
+        const colmapCountEl = document.getElementById('point-count-display');
+        if (colmapCountEl) colmapCountEl.textContent = `${pictureCount.toLocaleString('de-DE')} Images`;
+        pointSizeControl.classList.add('count-only');
+        pointSizeControl.classList.remove('hidden');
         showToast('COLMAP cameras loaded.', 'success');
     } catch (err) {
         selectedPcKey = null;
@@ -730,7 +735,12 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
             } else {
                 unloadColmapCameras();
                 clearColmapImageCache();
-                document.getElementById('colmap-tooltip')?.classList.remove('visible');                viewerEmpty.classList.remove('hidden');
+                document.getElementById('colmap-tooltip')?.classList.remove('visible');
+                viewerEmpty.classList.remove('hidden');
+                pointSizeControl.classList.add('hidden');
+                pointSizeControl.classList.remove('count-only');
+                const pcd = document.getElementById('point-count-display');
+                if (pcd) pcd.textContent = '';
             }
             setStatus('');
         }
@@ -824,6 +834,7 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         lastDownloadCaptureId = captureId;
         lastDownloadPc = resolved.download;
         prefetchedDownloadBuffer = buffer;
+        pointSizeControl.classList.remove('count-only');
         pointSizeControl.classList.remove('hidden');
 
 
