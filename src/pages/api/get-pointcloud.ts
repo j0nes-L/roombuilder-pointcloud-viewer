@@ -10,7 +10,15 @@ import {
 } from '../../lib/capture-permissions';
 
 export const GET: APIRoute = async ({request}) => {
+    const apiKey = import.meta.env.SNAPSPACE_API_KEY;
     const baseUrl = getApiUrl();
+
+    if (!apiKey) {
+        return new Response(JSON.stringify({error: 'API key is not configured.'}), {
+            status: 500,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
 
     const url = new URL(request.url);
     const captureId = url.searchParams.get('capture_id');
@@ -35,47 +43,25 @@ export const GET: APIRoute = async ({request}) => {
     if (!user) return unauthorizedResponse();
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
-    const {data: {session}} = await supabase.auth.getSession();
-    if (!session) return unauthorizedResponse();
-
     try {
-        const path = `${captureId}/files/${filename}`;
-        const fetchUrl = `${baseUrl}/share/get-download-link?path=${encodeURIComponent(path)}`;
+        const upstream = await fetch(
+            `${baseUrl}/captures/${encodeURIComponent(captureId)}/files/${filename}`,
+            {headers: {'X-API-Key': apiKey}},
+        );
 
-        const linkResponse = await fetch(fetchUrl, {
-            headers: {'Authorization': `Bearer ${session.access_token}`},
-        });
-
-        if (!linkResponse.ok) {
-            const errorText = await linkResponse.text();
-            return new Response(errorText, {
-                status: linkResponse.status,
+        if (!upstream.ok) {
+            const text = await upstream.text();
+            return new Response(text, {
+                status: upstream.status,
                 headers: {'Content-Type': 'application/json'},
             });
         }
 
-        const data = await linkResponse.json();
-        const downloadUrl = data.url;
-
-        if (!downloadUrl) {
-            return new Response(JSON.stringify({error: 'No download URL returned from API.'}), {
-                status: 500,
-                headers: {'Content-Type': 'application/json'},
-            });
-        }
-
-        const fileResponse = await fetch(downloadUrl);
-        if (!fileResponse.ok) {
-            return new Response(JSON.stringify({error: 'Failed to fetch file from storage.'}), {
-                status: fileResponse.status,
-                headers: {'Content-Type': 'application/json'},
-            });
-        }
         const headers = new Headers();
-        const contentLength = fileResponse.headers.get('Content-Length');
+        const contentLength = upstream.headers.get('Content-Length');
         if (contentLength) headers.set('Content-Length', contentLength);
-        headers.set('Content-Type', fileResponse.headers.get('Content-Type') || 'application/octet-stream');
-        return new Response(fileResponse.body, {status: 200, headers});
+        headers.set('Content-Type', upstream.headers.get('Content-Type') || 'application/octet-stream');
+        return new Response(upstream.body, {status: 200, headers});
 
     } catch (error) {
         return new Response(JSON.stringify({
@@ -87,3 +73,4 @@ export const GET: APIRoute = async ({request}) => {
         });
     }
 };
+
