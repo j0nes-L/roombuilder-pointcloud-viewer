@@ -55,7 +55,7 @@ const IS_LOW_END = IS_MOBILE || HW_CONCURRENCY <= 4 || DEVICE_MEMORY <= 4;
 
 const MAX_PIXEL_RATIO = IS_LOW_END ? 1.25 : 2.0;
 const MAX_POINTS_LOW_END = 800_000;
-const MAX_POINTS_DESKTOP = 6_000_000;
+const MAX_POINTS_DESKTOP = 2_500_000;
 const MAX_POINTS = IS_LOW_END ? MAX_POINTS_LOW_END : MAX_POINTS_DESKTOP;
 
 export function initViewer(containerEl: HTMLElement): void {

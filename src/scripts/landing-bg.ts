@@ -37,6 +37,10 @@ function initPointGrid(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D)
     const sinT = Math.sin(TILT);
     const cosT = Math.cos(TILT);
     const ROT_SPEED = 0.01;
+    const AUTO_VEL = reduceMotion ? 0 : ROT_SPEED;
+    const DRAG_SENS = 0.006;
+    const SPIN_DAMP = 2.4;
+    const MAX_SPIN = 6;
 
     const rzMax = Math.hypot(ox, oz);
     const zcMax = oy * sinT + rzMax * cosT;
@@ -53,6 +57,8 @@ function initPointGrid(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D)
     let scale = 1;
     let heroH = window.innerHeight;
     let yaw = 0.3;
+    let spinVel = AUTO_VEL;
+    let dragging = false;
     let last = 0;
     let rafId = 0;
     let running = false;
@@ -92,11 +98,11 @@ function initPointGrid(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D)
             const py = cy + ry * scale * persp;
 
             const t = Math.min(1, Math.max(0, (persp - perspFar) / perspRange));
-            const alpha = 0.34 + t * t * 0.48;
-            const size = 1.3 + t * 1.3;
+            const alpha = 0.5 + t * t * 0.5;
+            const size = 1.4 + t * 1.5;
             const half = size * 0.5;
 
-            ctx.fillStyle = `rgba(210, 206, 255, ${alpha.toFixed(3)})`;
+            ctx.fillStyle = `rgba(228, 225, 255, ${alpha.toFixed(3)})`;
             ctx.fillRect(px - half, py - half, size, size);
         }
     }
@@ -115,7 +121,18 @@ function initPointGrid(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D)
         if (!last) last = now;
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
-        yaw += dt * ROT_SPEED;
+
+        if (!dragging) {
+            spinVel = AUTO_VEL + (spinVel - AUTO_VEL) * Math.exp(-SPIN_DAMP * dt);
+            yaw += spinVel * dt;
+
+            if (reduceMotion && Math.abs(spinVel - AUTO_VEL) < 1e-4) {
+                render();
+                stop();
+                return;
+            }
+        }
+
         render();
         rafId = requestAnimationFrame(frame);
     }
@@ -139,6 +156,49 @@ function initPointGrid(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D)
 
     window.addEventListener('scroll', () => { applyScroll(); }, { passive: true });
     window.addEventListener('resize', () => { resize(); render(); applyScroll(); }, { passive: true });
+
+    let pointerId: number | null = null;
+    let lastX = 0;
+    let lastMoveT = 0;
+
+    canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+        if (!e.isPrimary) return;
+        dragging = true;
+        pointerId = e.pointerId;
+        lastX = e.clientX;
+        lastMoveT = performance.now();
+        spinVel = 0;
+        canvas.classList.add('grabbing');
+        try { canvas.setPointerCapture(e.pointerId); } catch { }
+        start();
+    });
+
+    canvas.addEventListener('pointermove', (e: PointerEvent) => {
+        if (!dragging || e.pointerId !== pointerId) return;
+        const now = performance.now();
+        const dx = e.clientX - lastX;
+        const dt = Math.max(0.001, (now - lastMoveT) / 1000);
+        const dYaw = dx * DRAG_SENS;
+        yaw += dYaw;
+        const inst = Math.max(-MAX_SPIN, Math.min(MAX_SPIN, dYaw / dt));
+        spinVel = spinVel * 0.6 + inst * 0.4;
+        lastX = e.clientX;
+        lastMoveT = now;
+        render();
+    });
+
+    function endDrag(e: PointerEvent): void {
+        if (!dragging || e.pointerId !== pointerId) return;
+        dragging = false;
+        pointerId = null;
+        canvas.classList.remove('grabbing');
+        try { canvas.releasePointerCapture(e.pointerId); } catch { }
+        last = 0;
+        start();
+    }
+
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
 
     if (!reduceMotion) {
         document.addEventListener('visibilitychange', () => {
