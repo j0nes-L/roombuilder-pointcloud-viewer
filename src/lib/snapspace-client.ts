@@ -98,6 +98,38 @@ export function clearMeshInfoCache(captureId?: string): void {
     }
 }
 
+async function getDirectDownloadUrl(captureId: string, filename: string): Promise<string | null> {
+    try {
+        const res = await fetch(
+            `${getApiBase()}/get-download-link?capture_id=${encodeURIComponent(captureId)}&filename=${encodeURIComponent(filename)}`,
+            {credentials: 'include'},
+        );
+        if (!res.ok) return null;
+        const data = await res.json() as { url?: string };
+        return data.url || null;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchCaptureFile(
+    filename: string,
+    proxyUrl: string,
+    captureId: string,
+    onProgress?: (fraction: number) => void,
+    knownTotalBytes?: number | null,
+): Promise<ArrayBuffer> {
+    const directUrl = await getDirectDownloadUrl(captureId, filename);
+    if (directUrl) {
+        const res = await fetch(directUrl);
+        if (res.ok) return streamResponse(res, onProgress, knownTotalBytes);
+    }
+
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error(`Failed to download ${filename}: ${res.status}`);
+    return streamResponse(res, onProgress, knownTotalBytes);
+}
+
 async function streamResponse(res: Response, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
     const clHeader = res.headers.get('Content-Length') || res.headers.get('X-Content-Length');
     const total = clHeader ? parseInt(clHeader, 10) : (knownTotalBytes || 0);
@@ -129,9 +161,13 @@ async function streamResponse(res: Response, onProgress?: (fraction: number) => 
 }
 
 export async function fetchMeshGlb(captureId: string, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
-    const res = await fetch(`${getApiBase()}/get-mesh?capture_id=${captureId}`);
-    if (!res.ok) throw new Error(`Failed to download mesh: ${res.status}`);
-    return streamResponse(res, onProgress, knownTotalBytes);
+    return fetchCaptureFile(
+        'mesh.glb',
+        `${getApiBase()}/get-mesh?capture_id=${captureId}`,
+        captureId,
+        onProgress,
+        knownTotalBytes,
+    );
 }
 
 export async function deleteCapture(captureId: string): Promise<void> {
@@ -204,13 +240,21 @@ export function clearPointCloudsCache(captureId?: string): void {
 
 
 export async function fetchPointCloudData(captureId: string, filename: string, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
-    const res = await fetch(`${getApiBase()}/get-pointcloud?capture_id=${captureId}&filename=${filename}`);
-    if (!res.ok) throw new Error(`Failed to download point cloud: ${res.status}`);
-    return streamResponse(res, onProgress, knownTotalBytes);
+    return fetchCaptureFile(
+        filename,
+        `${getApiBase()}/get-pointcloud?capture_id=${captureId}&filename=${filename}`,
+        captureId,
+        onProgress,
+        knownTotalBytes,
+    );
 }
 
 export async function fetchColmapZip(captureId: string, onProgress?: (fraction: number) => void, knownTotalBytes?: number | null): Promise<ArrayBuffer> {
-    const res = await fetch(`${getApiBase()}/get-colmap?capture_id=${captureId}`);
-    if (!res.ok) throw new Error(`Failed to download COLMAP zip: ${res.status}`);
-    return streamResponse(res, onProgress, knownTotalBytes);
+    return fetchCaptureFile(
+        'colmap.zip',
+        `${getApiBase()}/get-colmap?capture_id=${captureId}`,
+        captureId,
+        onProgress,
+        knownTotalBytes,
+    );
 }

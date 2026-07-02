@@ -102,6 +102,7 @@ if (resendBlock) {
     const hint = document.getElementById('resend-hint');
     const btn = document.getElementById('resend-btn') as HTMLButtonElement | null;
     const defaultLabel = btn?.textContent ?? 'Resend';
+    const LOADING_DOTS = '<span class="loading-dots"><span></span><span></span><span></span></span>';
 
     let storedEmail = '';
     try { storedEmail = sessionStorage.getItem('ss_pending_confirm_email') ?? ''; } catch {}
@@ -134,7 +135,7 @@ if (resendBlock) {
             return;
         }
         btn.disabled = true;
-        btn.textContent = 'Sending…';
+        btn.innerHTML = LOADING_DOTS;
         try {
             const res = await fetch(endpoint, {
                 method: 'POST',

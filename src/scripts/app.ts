@@ -164,6 +164,7 @@ downloadMeshBtn.addEventListener('click', async () => {
 });
 
 const SPINNER = '<div class="spinner"></div>';
+const LOADING_DOTS = '<span class="loading-dots"><span></span><span></span><span></span></span>';
 
 shareBtn.addEventListener('click', async () => {
     if (!lastDownloadCaptureId) return;
@@ -174,7 +175,7 @@ shareBtn.addEventListener('click', async () => {
     const btn = shareBtn as HTMLButtonElement;
     const origHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.textContent = 'Creating link…';
+    btn.innerHTML = LOADING_DOTS;
     try {
         const supabase = getSupabaseBrowserClient();
         const {data: {session}} = await supabase.auth.getSession();
@@ -720,6 +721,14 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
         ? `Delete Capture "${captureId}" permanently?`
         : `Remove "${captureId}" from your library?`;
     if (!confirm(confirmMsg)) return;
+
+    const delBtn = listItemEl.querySelector<HTMLButtonElement>('.item-delete-inline');
+    if (delBtn) {
+        delBtn.classList.add('deleting');
+        delBtn.disabled = true;
+        delBtn.innerHTML = '<span class="btn-spinner-sm"></span>';
+    }
+
     try {
         await deleteCapture(captureId);
         const pcKey = `${captureId}/${viewFilename}`;
@@ -760,6 +769,11 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
         }
         showToast(role === 'owner' ? 'Capture deleted.' : 'Capture removed from library.', 'success');
     } catch (err) {
+        if (delBtn) {
+            delBtn.classList.remove('deleting');
+            delBtn.disabled = false;
+            delBtn.innerHTML = SVG_TRASH;
+        }
         showToast(`Delete failed: ${err instanceof Error ? err.message : err}`, 'error');
     }
 }

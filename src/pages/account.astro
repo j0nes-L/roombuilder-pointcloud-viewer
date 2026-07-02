@@ -248,6 +248,8 @@ function markMatch(id: string, ok: boolean) {
 
 initToastFromUrl();
 
+const LOADING_DOTS = '<span class="loading-dots"><span></span><span></span><span></span></span>';
+
 const tabLogin = document.getElementById('tab-login');
 const tabRegister = document.getElementById('tab-register');
 const panelLogin = document.getElementById('panel-login');
@@ -337,7 +339,7 @@ loginForm?.addEventListener('submit', async (e) => {
     if (hasError) { setError(loginError, 'Please fill in all fields.'); return; }
 
     clearError(loginError);
-    if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = '…'; }
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = LOADING_DOTS; }
     try {
         const res = await fetch('/api/auth/supabase-login', {
             method: 'POST',
@@ -416,7 +418,7 @@ registerForm?.addEventListener('submit', async (e) => {
     if (!/^[\p{L}\p{N} ._-]+$/u.test(display_name)) { markField('reg-display-name', true); setError(registerError, 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'); return; }
 
     clearError(registerError);
-    if (registerBtn) { registerBtn.disabled = true; registerBtn.textContent = '…'; }
+    if (registerBtn) { registerBtn.disabled = true; registerBtn.innerHTML = LOADING_DOTS; }
     try {
         const res = await fetch('/api/auth/supabase-register', {
             method: 'POST',
@@ -471,7 +473,7 @@ forgotForm?.addEventListener('submit', async (e) => {
     const email = forgotEmailEl?.value.trim() ?? '';
     if (!email) { markField('forgot-email', true); setError(forgotError, 'Please enter your email.'); return; }
     clearError(forgotError);
-    if (forgotBtn) { forgotBtn.disabled = true; forgotBtn.textContent = '…'; }
+    if (forgotBtn) { forgotBtn.disabled = true; forgotBtn.innerHTML = LOADING_DOTS; }
     if (forgotSuccess) forgotSuccess.classList.add('hidden');
     try {
         const res = await fetch('/api/auth/reset-password', {
@@ -553,7 +555,7 @@ changePwForm?.addEventListener('submit', async (e) => {
     if (pw.length < 6) { markField('cp-new-password', true); setError(cpError, 'Password must be at least 6 characters.'); return; }
 
     clearError(cpError);
-    if (cpSubmitBtn) { cpSubmitBtn.disabled = true; cpSubmitBtn.textContent = '…'; }
+    if (cpSubmitBtn) { cpSubmitBtn.disabled = true; cpSubmitBtn.innerHTML = LOADING_DOTS; }
     try {
         const res = await fetch('/api/auth/update-password', {
             method: 'POST',
@@ -613,7 +615,7 @@ changeNameForm?.addEventListener('submit', async (e) => {
     if (!/^[\p{L}\p{N} ._-]+$/u.test(display_name)) { markField('cn-new-name', true); setError(cnError, 'Display name may only contain letters, numbers, spaces, dots, underscores and hyphens.'); return; }
 
     clearError(cnError);
-    if (cnSubmitBtn) { cnSubmitBtn.disabled = true; cnSubmitBtn.textContent = '…'; }
+    if (cnSubmitBtn) { cnSubmitBtn.disabled = true; cnSubmitBtn.innerHTML = LOADING_DOTS; }
     try {
         const res = await fetch('/api/auth/update-display-name', {
             method: 'POST',
@@ -646,8 +648,11 @@ changeNameForm?.addEventListener('submit', async (e) => {
     }
 });
 
-document.getElementById('logout-btn')?.addEventListener('click', async () => {
-    const displayName = (document.getElementById('logout-btn') as HTMLButtonElement | null)?.dataset.displayName;
+document.getElementById('logout-btn')?.addEventListener('click', async (e) => {
+    const logoutBtn = e.currentTarget as HTMLButtonElement;
+    const displayName = logoutBtn.dataset.displayName;
+    logoutBtn.disabled = true;
+    logoutBtn.innerHTML = LOADING_DOTS;
     await fetch('/api/auth/supabase-logout', {method: 'POST'});
     window.location.href = '/account?toast=info&msg=' + encodeURIComponent(`Goodbye${displayName ? ', ' + displayName : ''}! You have been logged out.`);
 });
