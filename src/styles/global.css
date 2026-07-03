@@ -1534,6 +1534,18 @@ body.privacy-page {
     color: var(--text-secondary);
 }
 
+.auth-tab:disabled,
+.auth-tab.auth-tab-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    color: var(--text-muted);
+}
+
+.auth-tab:disabled:hover,
+.auth-tab.auth-tab-disabled:hover {
+    color: var(--text-muted);
+}
+
 .auth-panel {
     display: flex;
     flex-direction: column;

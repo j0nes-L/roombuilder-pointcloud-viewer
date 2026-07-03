@@ -86,7 +86,7 @@ const mode = Astro.url.searchParams.get('mode');
             <div class="account-card">
                 <div class="auth-tabs">
                     <button class="auth-tab active" id="tab-login" type="button">Login</button>
-                    <button class="auth-tab" id="tab-register" type="button">Register</button>
+                    <button class="auth-tab auth-tab-disabled" id="tab-register" type="button" disabled aria-disabled="true" title="Currently for internal use only">Register</button>
                 </div>
 
                 <!-- Login Form -->

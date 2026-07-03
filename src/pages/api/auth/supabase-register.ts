@@ -2,7 +2,16 @@ import type {APIRoute} from 'astro';
 import {createSupabaseServerClientFromRequest} from '../../../lib/supabase-server';
 import {getOrigin} from '../../../lib/get-origin';
 
+const REGISTRATION_ENABLED = false;
+
 export const POST: APIRoute = async ({request}) => {
+    if (!REGISTRATION_ENABLED) {
+        return new Response(JSON.stringify({error: 'Currently for internal use only.'}), {
+            status: 403,
+            headers: {'Content-Type': 'application/json'},
+        });
+    }
+
     const responseHeaders = new Headers({'Content-Type': 'application/json'});
     const supabase = createSupabaseServerClientFromRequest(request, responseHeaders);
 
