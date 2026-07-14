@@ -1,6 +1,7 @@
 import type {APIRoute} from 'astro';
 import {getApiUrl} from '../../lib/endpoint-config';
 import {createSupabaseServerClientFromRequest} from '../../lib/supabase-server';
+import {getSignedFileUrl} from '../../lib/signed-url';
 import {
     forbiddenResponse,
     isValidCaptureId,
@@ -35,34 +36,16 @@ export const GET: APIRoute = async ({request}) => {
     if (!user) return unauthorizedResponse();
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
 
-    const {data: {session}} = await supabase.auth.getSession();
-    const accessToken = session?.access_token;
-    if (!accessToken) return unauthorizedResponse();
-
     try {
-        const path = `${captureId}/files/${filename}`;
-        const upstream = await fetch(
-            `${baseUrl}/share/get-download-link?path=${encodeURIComponent(path)}`,
-            {headers: {Authorization: `Bearer ${accessToken}`}},
-        );
-
-        if (!upstream.ok) {
-            const text = await upstream.text();
-            return new Response(text, {
-                status: upstream.status,
-                headers: {'Content-Type': 'application/json'},
-            });
-        }
-
-        const data = await upstream.json() as { url?: string; expires_at?: number };
-        if (!data.url) {
+        const signedUrl = await getSignedFileUrl(supabase, baseUrl, `${captureId}/files/${filename}`);
+        if (!signedUrl) {
             return new Response(JSON.stringify({error: 'No download URL returned.'}), {
                 status: 502,
                 headers: {'Content-Type': 'application/json'},
             });
         }
 
-        return new Response(JSON.stringify({url: data.url, expires_at: data.expires_at ?? null}), {
+        return new Response(JSON.stringify({url: signedUrl}), {
             status: 200,
             headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'},
         });

@@ -1,6 +1,7 @@
 import type {APIRoute} from 'astro';
 import {getApiUrl} from '../../lib/endpoint-config';
 import {createSupabaseServerClientFromRequest} from '../../lib/supabase-server';
+import {getSignedFileUrl, redirectToSignedUrl} from '../../lib/signed-url';
 import {
     forbiddenResponse,
     isValidCaptureId,
@@ -37,6 +38,9 @@ export const GET: APIRoute = async ({request}) => {
     const user = await requireUser(supabase);
     if (!user) return unauthorizedResponse();
     if (!(await userHasCaptureAccess(supabase, captureId))) return forbiddenResponse();
+
+    const signedUrl = await getSignedFileUrl(supabase, baseUrl, `${captureId}/files/mesh.glb`);
+    if (signedUrl) return redirectToSignedUrl(signedUrl);
 
     try {
         const upstream = await fetch(
