@@ -119,10 +119,18 @@ async function fetchCaptureFile(
     onProgress?: (fraction: number) => void,
     knownTotalBytes?: number | null,
 ): Promise<ArrayBuffer> {
+    // Prefer the direct share URL: bytes stream straight from the API to the
+    // browser, so no Vercel origin transfer is consumed. Falls back to the
+    // proxy stream only if the share link is unavailable (e.g. the server-side
+    // /share bug). Once /share is fixed server-side, this path costs ~0 egress.
     const directUrl = await getDirectDownloadUrl(captureId, filename);
     if (directUrl) {
-        const res = await fetch(directUrl);
-        if (res.ok) return streamResponse(res, onProgress, knownTotalBytes);
+        try {
+            const res = await fetch(directUrl);
+            if (res.ok) return streamResponse(res, onProgress, knownTotalBytes);
+        } catch {
+            // fall through to proxy
+        }
     }
 
     const res = await fetch(proxyUrl);
