@@ -17,6 +17,14 @@ interface PointCloudInfo {
     url: string;
 }
 
+interface ReconstructionInfo {
+    model?: string | null;
+    checkpoint?: string | null;
+    points?: number | null;
+    completed_at?: string | null;
+    backfilled?: boolean;
+}
+
 interface PointCloudsResponse {
     capture_id: string;
     pointclouds: PointCloudInfo[];
@@ -25,6 +33,7 @@ interface PointCloudsResponse {
     isColmap?: boolean;
     colmap_url?: string | null;
     colmap_size_bytes?: number | null;
+    reconstruction?: ReconstructionInfo | null;
 }
 
 interface MeshInfo {

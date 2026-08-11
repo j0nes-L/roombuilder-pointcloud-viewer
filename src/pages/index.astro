@@ -1,212 +1,383 @@
 ---
-import '../styles/global.css';
-import Footer from '../components/Footer.astro';
-import {createSupabaseServerClient} from '../lib/supabase-server';
+import "../styles/global.css";
+import Footer from "../components/Footer.astro";
+import { createSupabaseServerClient } from "../lib/supabase-server";
 
 const supabase = createSupabaseServerClient(
     Astro.cookies,
-    Astro.request.headers.get('Cookie') ?? ''
+    Astro.request.headers.get("Cookie") ?? "",
 );
-const {data: {user}} = await supabase.auth.getUser();
+const {
+    data: { user },
+} = await supabase.auth.getUser();
 
 let displayName: string | null = null;
 if (user) {
-    const {data} = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', user.id)
+    const { data } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
         .single();
-    displayName = data?.display_name
-        ?? (user.user_metadata?.display_name as string | undefined)
-        ?? null;
+    displayName =
+        data?.display_name ??
+        (user.user_metadata?.display_name as string | undefined) ??
+        null;
 }
 
 const openViewerHref = user
-    ? '/viewer'
-    : `/account?next=${encodeURIComponent('/viewer')}&toast=info&msg=${encodeURIComponent('Please log in or create an account to open the viewer.')}`;
+    ? "/viewer"
+    : `/account?next=${encodeURIComponent("/viewer")}&toast=info&msg=${encodeURIComponent("Please log in or create an account to open the viewer.")}`;
 ---
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SnapSpace</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
-    <style>
-        html { scroll-behavior: smooth; }
-        html, body { overflow-x: hidden !important; overflow-y: auto !important; height: auto !important; }
-    </style>
-</head>
-<body class="landing-page">
-
-<div class="icons-fixed">
-    <a href="/account" class={`btn ${user ? 'btn-account-user' : 'btn-account-login'}`} title="Account" aria-label="Account">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="8" r="4"/>
-            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-        </svg>
-        {user ? (displayName ?? user.email ?? 'Account') : 'LOGIN'}
-    </a>
-</div>
-
-<div class="landing-layout">
-    <section class="landing-hero">
-        <div class="landing-bg" aria-hidden="true"></div>
-        <canvas id="landing-points" class="landing-points" aria-hidden="true"></canvas>
-        <div class="landing-bg-overlay" aria-hidden="true"></div>
-
-        <div class="hero-badge">
-            <span class="hero-badge-text">Finalist at</span>
-            <svg class="hero-badge-logo" viewBox="0 0 54 41.896" role="img" aria-label="XRCC26" fill="currentColor">
-                <path d="M 2.108 6.879 L 0 0.845 L 2.994 0.637 L 3.763 4.165 L 3.941 4.153 L 4.236 0.553 L 7.231 0.344 L 5.989 6.61 L 8.182 13.831 L 5.187 14.039 L 4.305 9.356 L 4.127 9.368 L 3.945 14.123 L 0.951 14.332 Z M 16.035 10.752 C 16.067 11.233 16.063 11.545 16.104 11.882 C 16.128 12.219 16.148 12.512 16.193 12.72 C 16.209 12.96 16.286 13.129 16.33 13.269 L 13.239 13.482 C 13.239 13.482 13.182 13.341 13.158 13.229 C 13.117 13.137 13.093 12.993 13.065 12.832 C 13.036 12.672 13.024 12.463 13.004 12.223 L 12.802 9.348 C 12.773 8.963 12.737 8.643 12.672 8.406 C 12.607 8.17 12.531 7.981 12.438 7.857 C 12.355 7.739 12.236 7.65 12.098 7.604 C 11.96 7.563 11.817 7.545 11.673 7.552 L 11.576 7.56 L 11.997 13.55 L 8.905 13.762 L 7.954 0.292 L 11.754 0.027 C 12.381 -0.017 12.931 -0.005 13.372 0.043 C 13.813 0.096 14.194 0.228 14.501 0.432 C 14.809 0.637 15.023 0.929 15.177 1.29 C 15.331 1.651 15.432 2.128 15.468 2.689 C 15.509 3.251 15.493 3.72 15.424 4.113 C 15.355 4.506 15.217 4.838 15.023 5.091 C 14.813 5.347 14.538 5.544 14.173 5.68 C 13.809 5.816 13.348 5.901 12.802 5.937 L 12.814 6.129 C 13.344 6.093 13.785 6.109 14.161 6.181 C 14.538 6.254 14.841 6.41 15.084 6.634 C 15.327 6.859 15.513 7.183 15.654 7.596 C 15.78 8.005 15.885 8.546 15.93 9.192 L 16.031 10.603 Z M 12.09 4.782 C 12.349 4.766 12.519 4.67 12.62 4.517 C 12.721 4.349 12.753 4.089 12.725 3.736 C 12.701 3.415 12.636 3.178 12.51 3.01 C 12.385 2.842 12.203 2.774 11.944 2.79 L 11.236 2.838 L 11.378 4.83 L 12.09 4.782 Z M 9.027 25.115 C 9.112 26.318 8.901 27.252 8.383 27.918 C 7.882 28.583 6.967 28.952 5.664 29.04 C 4.361 29.132 3.406 28.892 2.812 28.302 C 2.221 27.713 1.881 26.819 1.796 25.612 L 1.339 19.098 C 1.254 17.895 1.464 16.961 1.966 16.296 C 2.468 15.63 3.382 15.261 4.685 15.173 C 5.988 15.081 6.927 15.326 7.538 15.911 C 8.128 16.5 8.484 17.394 8.569 18.597 L 8.671 20.008 L 5.676 20.217 L 5.632 19.575 C 5.583 18.902 5.502 18.441 5.389 18.22 C 5.276 18.003 5.106 17.899 4.899 17.915 C 4.689 17.931 4.535 18.052 4.454 18.284 C 4.373 18.517 4.357 18.97 4.406 19.659 L 4.758 24.635 C 4.807 25.308 4.888 25.769 5.001 25.99 C 5.114 26.206 5.284 26.31 5.49 26.294 C 5.701 26.278 5.854 26.158 5.935 25.925 C 6.016 25.693 6.033 25.24 5.984 24.55 C 5.948 24.053 5.919 23.636 5.879 23.299 C 5.854 22.963 5.802 22.69 5.79 22.498 C 5.741 22.273 5.713 22.085 5.668 21.94 L 8.662 21.732 C 8.662 21.732 8.719 21.856 8.76 21.985 C 8.768 22.081 8.808 22.209 8.82 22.37 C 8.832 22.53 8.861 22.722 8.881 22.979 L 9.027 25.116 Z M 22.812 16.881 L 20.283 17.058 L 20.465 19.659 L 22.703 19.503 L 22.881 22.009 L 20.643 22.165 L 20.846 25.039 L 23.375 24.863 L 23.569 27.625 L 17.949 28.014 L 17.002 14.528 L 22.622 14.139 L 22.816 16.901 Z M 27.995 24.298 L 26.915 24.375 L 26.931 27.373 L 23.84 27.586 L 24.819 13.967 L 28.602 13.707 L 31.503 27.056 L 28.396 27.273 L 27.995 24.298 Z M 27.66 21.805 L 27.077 17.699 L 26.883 17.712 L 26.899 21.857 Z M 35.647 26.771 L 32.556 26.984 L 31.799 16.26 L 29.978 16.384 L 29.784 13.622 L 36.513 13.157 L 36.707 15.919 L 34.886 16.044 Z M 44.067 12.636 C 44.156 13.87 43.946 14.804 43.424 15.454 C 42.902 16.103 42.008 16.472 40.721 16.56 C 39.434 16.649 38.496 16.408 37.889 15.839 C 37.282 15.269 36.942 14.372 36.857 13.137 L 39.883 12.928 C 39.891 13.024 39.928 13.121 39.936 13.233 C 39.944 13.345 39.985 13.441 40.037 13.533 C 40.078 13.626 40.146 13.686 40.231 13.746 C 40.316 13.806 40.413 13.814 40.527 13.806 C 40.64 13.798 40.733 13.758 40.81 13.706 C 40.887 13.638 40.931 13.57 40.972 13.47 C 40.996 13.369 41.024 13.273 41.032 13.161 C 41.024 13.048 41.049 12.948 41.045 12.852 L 44.067 12.635 Z M 42.024 26.33 L 41.672 21.339 C 41.648 21.002 41.627 20.73 41.579 20.505 C 41.53 20.28 41.486 20.124 41.429 20 C 41.372 19.876 41.304 19.799 41.219 19.756 C 41.134 19.711 41.053 19.703 40.94 19.711 C 40.826 19.719 40.749 19.74 40.668 19.796 C 40.592 19.848 40.531 19.936 40.494 20.064 C 40.443 20.233 40.417 20.409 40.417 20.585 C 40.401 20.814 40.421 21.086 40.446 21.423 L 40.798 26.414 L 37.804 26.623 L 37.395 20.858 C 37.31 19.671 37.521 18.737 38.022 18.072 C 38.524 17.406 39.438 17.037 40.741 16.949 C 42.044 16.857 42.999 17.098 43.594 17.687 C 44.184 18.276 44.524 19.154 44.609 20.361 L 45.018 26.126 Z M 17.075 25.504 C 17.107 25.985 17.103 26.298 17.144 26.635 C 17.168 26.972 17.188 27.264 17.233 27.473 C 17.249 27.713 17.326 27.882 17.37 28.022 L 14.279 28.235 C 14.279 28.235 14.222 28.094 14.198 27.982 C 14.157 27.89 14.133 27.745 14.105 27.585 C 14.077 27.424 14.065 27.216 14.044 26.976 L 13.842 24.101 C 13.814 23.716 13.777 23.395 13.712 23.159 C 13.648 22.922 13.571 22.734 13.478 22.61 C 13.389 22.486 13.268 22.397 13.138 22.361 C 13 22.32 12.857 22.302 12.713 22.309 L 12.616 22.317 L 13.037 28.302 L 9.945 28.515 L 8.995 15.045 L 12.794 14.78 C 13.421 14.736 13.971 14.748 14.413 14.796 C 14.854 14.849 15.234 14.981 15.541 15.185 C 15.849 15.39 16.063 15.682 16.217 16.043 C 16.371 16.404 16.472 16.881 16.509 17.442 C 16.549 18.003 16.533 18.473 16.464 18.865 C 16.395 19.258 16.258 19.591 16.063 19.844 C 15.853 20.1 15.578 20.297 15.214 20.433 C 14.849 20.569 14.388 20.653 13.842 20.69 L 13.854 20.882 C 14.384 20.846 14.825 20.862 15.202 20.934 C 15.578 21.006 15.881 21.162 16.124 21.387 C 16.367 21.612 16.553 21.936 16.695 22.349 C 16.82 22.758 16.925 23.299 16.97 23.945 L 17.071 25.356 Z M 13.134 19.539 C 13.393 19.523 13.563 19.427 13.664 19.274 C 13.765 19.106 13.798 18.845 13.769 18.493 C 13.745 18.172 13.68 17.935 13.555 17.767 C 13.429 17.598 13.247 17.53 12.988 17.546 L 12.28 17.595 L 12.422 19.587 Z M 52.855 23.027 C 52.888 23.508 52.884 23.821 52.924 24.158 C 52.949 24.494 52.969 24.787 53.013 24.995 C 53.029 25.236 53.106 25.404 53.151 25.545 L 50.06 25.761 C 50.06 25.761 50.003 25.621 49.979 25.509 C 49.938 25.412 49.914 25.272 49.885 25.112 C 49.857 24.951 49.845 24.743 49.825 24.502 L 49.622 21.628 C 49.594 21.243 49.558 20.922 49.493 20.686 C 49.428 20.449 49.351 20.261 49.258 20.137 C 49.169 20.012 49.048 19.924 48.919 19.888 C 48.781 19.846 48.637 19.829 48.494 19.836 L 48.396 19.844 L 48.817 25.834 L 45.726 26.046 L 44.775 12.576 L 48.575 12.311 C 49.202 12.267 49.752 12.279 50.193 12.327 C 50.634 12.379 51.014 12.512 51.322 12.716 C 51.629 12.92 51.844 13.213 51.998 13.574 C 52.151 13.935 52.253 14.412 52.289 14.973 C 52.33 15.534 52.313 16.003 52.244 16.396 C 52.176 16.789 52.038 17.122 51.844 17.374 C 51.633 17.631 51.358 17.827 50.994 17.964 C 50.63 18.1 50.169 18.18 49.622 18.22 L 49.635 18.413 C 50.165 18.377 50.606 18.393 50.982 18.465 C 51.358 18.537 51.662 18.693 51.905 18.918 C 52.147 19.142 52.334 19.467 52.475 19.88 C 52.601 20.289 52.706 20.834 52.75 21.475 L 52.851 22.887 Z M 48.911 17.061 C 49.169 17.045 49.339 16.949 49.441 16.797 C 49.541 16.629 49.574 16.368 49.546 16.015 C 49.522 15.694 49.457 15.458 49.331 15.29 C 49.206 15.121 49.024 15.053 48.765 15.069 L 48.057 15.117 L 48.198 17.11 L 48.911 17.062 Z M 37.973 37.953 C 38.058 39.155 37.847 40.089 37.329 40.755 C 36.828 41.42 35.913 41.789 34.61 41.877 C 33.307 41.97 32.352 41.729 31.758 41.14 C 31.167 40.55 30.827 39.656 30.742 38.45 L 30.285 31.935 C 30.2 30.732 30.41 29.798 30.912 29.133 C 31.414 28.467 32.328 28.098 33.631 28.01 C 34.934 27.918 35.873 28.163 36.484 28.748 C 37.075 29.337 37.431 30.231 37.515 31.434 L 37.617 32.845 L 34.623 33.054 L 34.578 32.412 C 34.529 31.738 34.448 31.278 34.335 31.057 C 34.222 30.841 34.052 30.736 33.846 30.752 C 33.635 30.768 33.481 30.889 33.401 31.121 C 33.32 31.354 33.303 31.807 33.352 32.496 L 33.704 37.471 C 33.753 38.145 33.833 38.606 33.947 38.827 C 34.06 39.043 34.23 39.147 34.436 39.131 C 34.647 39.115 34.801 38.995 34.878 38.762 C 34.958 38.53 34.974 38.077 34.926 37.387 C 34.89 36.89 34.861 36.473 34.821 36.136 C 34.797 35.8 34.744 35.527 34.732 35.335 C 34.683 35.114 34.655 34.922 34.61 34.777 L 37.605 34.569 C 37.605 34.569 37.661 34.693 37.702 34.822 C 37.71 34.918 37.75 35.046 37.762 35.206 C 37.775 35.367 37.803 35.559 37.823 35.816 Z M 45.107 27.404 C 45.196 28.639 44.986 29.573 44.464 30.223 C 43.942 30.872 43.048 31.241 41.761 31.329 C 40.474 31.417 39.532 31.177 38.929 30.608 C 38.322 30.038 37.982 29.14 37.897 27.905 L 40.923 27.697 C 40.931 27.793 40.968 27.889 40.976 28.002 C 40.984 28.114 41.025 28.21 41.077 28.302 C 41.117 28.399 41.186 28.455 41.271 28.515 C 41.356 28.575 41.453 28.583 41.567 28.575 C 41.68 28.567 41.773 28.527 41.85 28.475 C 41.927 28.407 41.971 28.339 42.012 28.238 C 42.036 28.138 42.064 28.042 42.072 27.93 C 42.064 27.817 42.089 27.717 42.085 27.621 Z M 43.064 41.099 L 42.712 36.108 C 42.688 35.771 42.667 35.499 42.619 35.274 C 42.57 35.049 42.526 34.893 42.469 34.769 C 42.412 34.645 42.34 34.568 42.259 34.524 C 42.174 34.48 42.093 34.472 41.979 34.48 C 41.866 34.488 41.789 34.508 41.708 34.564 C 41.631 34.617 41.571 34.705 41.534 34.833 C 41.483 35.002 41.457 35.178 41.457 35.354 C 41.441 35.583 41.461 35.856 41.486 36.192 L 41.838 41.183 L 38.844 41.392 L 38.435 35.627 C 38.35 34.44 38.56 33.506 39.062 32.841 C 39.564 32.175 40.478 31.806 41.781 31.718 C 43.084 31.626 44.039 31.867 44.634 32.456 C 45.224 33.045 45.564 33.923 45.649 35.13 L 46.058 40.895 Z M 50.876 34.636 L 51.071 34.624 L 50.342 27.044 L 53.049 26.855 L 54 40.341 L 50.52 40.582 L 48.93 32.965 L 48.736 32.977 L 49.472 40.654 L 46.765 40.842 L 45.815 27.356 L 49.294 27.116 Z"/>
-            </svg>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SnapSpace</title>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <style>
+            html {
+                scroll-behavior: smooth;
+            }
+            html,
+            body {
+                overflow-x: hidden !important;
+                overflow-y: auto !important;
+                height: auto !important;
+            }
+        </style>
+    </head>
+    <body class="landing-page">
+        <div class="icons-fixed">
+            <a
+                href="/account"
+                class={`btn ${user ? "btn-account-user" : "btn-account-login"}`}
+                title="Account"
+                aria-label="Account"
+            >
+                <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path>
+                </svg>
+                {user ? (displayName ?? user.email ?? "Account") : "LOGIN"}
+            </a>
         </div>
 
-        <div class="landing-hero-content">
-            <h1 class="landing-title">Welcome to [SnapSpace]</h1>
-            <p class="landing-tagline">
-                View, inspect and download your point clouds,<br/>COLMAP data and meshes - right in your browser.
-            </p>
-            <a href={openViewerHref} class="btn btn-accent landing-cta">
-                Go To Viewer
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                    <polyline points="12 5 19 12 12 19"/>
-                </svg>
-            </a>
-            <div class="landing-links">
-                <a href="https://www.meta.com/s/8BSi1EJ8l" target="_blank" rel="noopener noreferrer" class="btn landing-link-btn" title="Meta Quest App" aria-label="Meta Quest App">
-                    <img src="/icons/meta-icon.svg" width="18" height="18" alt="Meta Quest App" class="icon-white"/>
+        <div class="landing-layout">
+            <section class="landing-hero">
+                <div class="landing-bg" aria-hidden="true"></div>
+                <canvas
+                    id="landing-points"
+                    class="landing-points"
+                    aria-hidden="true"></canvas>
+                <div class="landing-bg-overlay" aria-hidden="true"></div>
+
+                <div class="hero-badge">
+                    <span class="hero-badge-text">Finalist at</span>
+                    <svg
+                        class="hero-badge-logo"
+                        viewBox="0 0 54 41.896"
+                        role="img"
+                        aria-label="XRCC26"
+                        fill="currentColor"
+                    >
+                        <path
+                            d="M 2.108 6.879 L 0 0.845 L 2.994 0.637 L 3.763 4.165 L 3.941 4.153 L 4.236 0.553 L 7.231 0.344 L 5.989 6.61 L 8.182 13.831 L 5.187 14.039 L 4.305 9.356 L 4.127 9.368 L 3.945 14.123 L 0.951 14.332 Z M 16.035 10.752 C 16.067 11.233 16.063 11.545 16.104 11.882 C 16.128 12.219 16.148 12.512 16.193 12.72 C 16.209 12.96 16.286 13.129 16.33 13.269 L 13.239 13.482 C 13.239 13.482 13.182 13.341 13.158 13.229 C 13.117 13.137 13.093 12.993 13.065 12.832 C 13.036 12.672 13.024 12.463 13.004 12.223 L 12.802 9.348 C 12.773 8.963 12.737 8.643 12.672 8.406 C 12.607 8.17 12.531 7.981 12.438 7.857 C 12.355 7.739 12.236 7.65 12.098 7.604 C 11.96 7.563 11.817 7.545 11.673 7.552 L 11.576 7.56 L 11.997 13.55 L 8.905 13.762 L 7.954 0.292 L 11.754 0.027 C 12.381 -0.017 12.931 -0.005 13.372 0.043 C 13.813 0.096 14.194 0.228 14.501 0.432 C 14.809 0.637 15.023 0.929 15.177 1.29 C 15.331 1.651 15.432 2.128 15.468 2.689 C 15.509 3.251 15.493 3.72 15.424 4.113 C 15.355 4.506 15.217 4.838 15.023 5.091 C 14.813 5.347 14.538 5.544 14.173 5.68 C 13.809 5.816 13.348 5.901 12.802 5.937 L 12.814 6.129 C 13.344 6.093 13.785 6.109 14.161 6.181 C 14.538 6.254 14.841 6.41 15.084 6.634 C 15.327 6.859 15.513 7.183 15.654 7.596 C 15.78 8.005 15.885 8.546 15.93 9.192 L 16.031 10.603 Z M 12.09 4.782 C 12.349 4.766 12.519 4.67 12.62 4.517 C 12.721 4.349 12.753 4.089 12.725 3.736 C 12.701 3.415 12.636 3.178 12.51 3.01 C 12.385 2.842 12.203 2.774 11.944 2.79 L 11.236 2.838 L 11.378 4.83 L 12.09 4.782 Z M 9.027 25.115 C 9.112 26.318 8.901 27.252 8.383 27.918 C 7.882 28.583 6.967 28.952 5.664 29.04 C 4.361 29.132 3.406 28.892 2.812 28.302 C 2.221 27.713 1.881 26.819 1.796 25.612 L 1.339 19.098 C 1.254 17.895 1.464 16.961 1.966 16.296 C 2.468 15.63 3.382 15.261 4.685 15.173 C 5.988 15.081 6.927 15.326 7.538 15.911 C 8.128 16.5 8.484 17.394 8.569 18.597 L 8.671 20.008 L 5.676 20.217 L 5.632 19.575 C 5.583 18.902 5.502 18.441 5.389 18.22 C 5.276 18.003 5.106 17.899 4.899 17.915 C 4.689 17.931 4.535 18.052 4.454 18.284 C 4.373 18.517 4.357 18.97 4.406 19.659 L 4.758 24.635 C 4.807 25.308 4.888 25.769 5.001 25.99 C 5.114 26.206 5.284 26.31 5.49 26.294 C 5.701 26.278 5.854 26.158 5.935 25.925 C 6.016 25.693 6.033 25.24 5.984 24.55 C 5.948 24.053 5.919 23.636 5.879 23.299 C 5.854 22.963 5.802 22.69 5.79 22.498 C 5.741 22.273 5.713 22.085 5.668 21.94 L 8.662 21.732 C 8.662 21.732 8.719 21.856 8.76 21.985 C 8.768 22.081 8.808 22.209 8.82 22.37 C 8.832 22.53 8.861 22.722 8.881 22.979 L 9.027 25.116 Z M 22.812 16.881 L 20.283 17.058 L 20.465 19.659 L 22.703 19.503 L 22.881 22.009 L 20.643 22.165 L 20.846 25.039 L 23.375 24.863 L 23.569 27.625 L 17.949 28.014 L 17.002 14.528 L 22.622 14.139 L 22.816 16.901 Z M 27.995 24.298 L 26.915 24.375 L 26.931 27.373 L 23.84 27.586 L 24.819 13.967 L 28.602 13.707 L 31.503 27.056 L 28.396 27.273 L 27.995 24.298 Z M 27.66 21.805 L 27.077 17.699 L 26.883 17.712 L 26.899 21.857 Z M 35.647 26.771 L 32.556 26.984 L 31.799 16.26 L 29.978 16.384 L 29.784 13.622 L 36.513 13.157 L 36.707 15.919 L 34.886 16.044 Z M 44.067 12.636 C 44.156 13.87 43.946 14.804 43.424 15.454 C 42.902 16.103 42.008 16.472 40.721 16.56 C 39.434 16.649 38.496 16.408 37.889 15.839 C 37.282 15.269 36.942 14.372 36.857 13.137 L 39.883 12.928 C 39.891 13.024 39.928 13.121 39.936 13.233 C 39.944 13.345 39.985 13.441 40.037 13.533 C 40.078 13.626 40.146 13.686 40.231 13.746 C 40.316 13.806 40.413 13.814 40.527 13.806 C 40.64 13.798 40.733 13.758 40.81 13.706 C 40.887 13.638 40.931 13.57 40.972 13.47 C 40.996 13.369 41.024 13.273 41.032 13.161 C 41.024 13.048 41.049 12.948 41.045 12.852 L 44.067 12.635 Z M 42.024 26.33 L 41.672 21.339 C 41.648 21.002 41.627 20.73 41.579 20.505 C 41.53 20.28 41.486 20.124 41.429 20 C 41.372 19.876 41.304 19.799 41.219 19.756 C 41.134 19.711 41.053 19.703 40.94 19.711 C 40.826 19.719 40.749 19.74 40.668 19.796 C 40.592 19.848 40.531 19.936 40.494 20.064 C 40.443 20.233 40.417 20.409 40.417 20.585 C 40.401 20.814 40.421 21.086 40.446 21.423 L 40.798 26.414 L 37.804 26.623 L 37.395 20.858 C 37.31 19.671 37.521 18.737 38.022 18.072 C 38.524 17.406 39.438 17.037 40.741 16.949 C 42.044 16.857 42.999 17.098 43.594 17.687 C 44.184 18.276 44.524 19.154 44.609 20.361 L 45.018 26.126 Z M 17.075 25.504 C 17.107 25.985 17.103 26.298 17.144 26.635 C 17.168 26.972 17.188 27.264 17.233 27.473 C 17.249 27.713 17.326 27.882 17.37 28.022 L 14.279 28.235 C 14.279 28.235 14.222 28.094 14.198 27.982 C 14.157 27.89 14.133 27.745 14.105 27.585 C 14.077 27.424 14.065 27.216 14.044 26.976 L 13.842 24.101 C 13.814 23.716 13.777 23.395 13.712 23.159 C 13.648 22.922 13.571 22.734 13.478 22.61 C 13.389 22.486 13.268 22.397 13.138 22.361 C 13 22.32 12.857 22.302 12.713 22.309 L 12.616 22.317 L 13.037 28.302 L 9.945 28.515 L 8.995 15.045 L 12.794 14.78 C 13.421 14.736 13.971 14.748 14.413 14.796 C 14.854 14.849 15.234 14.981 15.541 15.185 C 15.849 15.39 16.063 15.682 16.217 16.043 C 16.371 16.404 16.472 16.881 16.509 17.442 C 16.549 18.003 16.533 18.473 16.464 18.865 C 16.395 19.258 16.258 19.591 16.063 19.844 C 15.853 20.1 15.578 20.297 15.214 20.433 C 14.849 20.569 14.388 20.653 13.842 20.69 L 13.854 20.882 C 14.384 20.846 14.825 20.862 15.202 20.934 C 15.578 21.006 15.881 21.162 16.124 21.387 C 16.367 21.612 16.553 21.936 16.695 22.349 C 16.82 22.758 16.925 23.299 16.97 23.945 L 17.071 25.356 Z M 13.134 19.539 C 13.393 19.523 13.563 19.427 13.664 19.274 C 13.765 19.106 13.798 18.845 13.769 18.493 C 13.745 18.172 13.68 17.935 13.555 17.767 C 13.429 17.598 13.247 17.53 12.988 17.546 L 12.28 17.595 L 12.422 19.587 Z M 52.855 23.027 C 52.888 23.508 52.884 23.821 52.924 24.158 C 52.949 24.494 52.969 24.787 53.013 24.995 C 53.029 25.236 53.106 25.404 53.151 25.545 L 50.06 25.761 C 50.06 25.761 50.003 25.621 49.979 25.509 C 49.938 25.412 49.914 25.272 49.885 25.112 C 49.857 24.951 49.845 24.743 49.825 24.502 L 49.622 21.628 C 49.594 21.243 49.558 20.922 49.493 20.686 C 49.428 20.449 49.351 20.261 49.258 20.137 C 49.169 20.012 49.048 19.924 48.919 19.888 C 48.781 19.846 48.637 19.829 48.494 19.836 L 48.396 19.844 L 48.817 25.834 L 45.726 26.046 L 44.775 12.576 L 48.575 12.311 C 49.202 12.267 49.752 12.279 50.193 12.327 C 50.634 12.379 51.014 12.512 51.322 12.716 C 51.629 12.92 51.844 13.213 51.998 13.574 C 52.151 13.935 52.253 14.412 52.289 14.973 C 52.33 15.534 52.313 16.003 52.244 16.396 C 52.176 16.789 52.038 17.122 51.844 17.374 C 51.633 17.631 51.358 17.827 50.994 17.964 C 50.63 18.1 50.169 18.18 49.622 18.22 L 49.635 18.413 C 50.165 18.377 50.606 18.393 50.982 18.465 C 51.358 18.537 51.662 18.693 51.905 18.918 C 52.147 19.142 52.334 19.467 52.475 19.88 C 52.601 20.289 52.706 20.834 52.75 21.475 L 52.851 22.887 Z M 48.911 17.061 C 49.169 17.045 49.339 16.949 49.441 16.797 C 49.541 16.629 49.574 16.368 49.546 16.015 C 49.522 15.694 49.457 15.458 49.331 15.29 C 49.206 15.121 49.024 15.053 48.765 15.069 L 48.057 15.117 L 48.198 17.11 L 48.911 17.062 Z M 37.973 37.953 C 38.058 39.155 37.847 40.089 37.329 40.755 C 36.828 41.42 35.913 41.789 34.61 41.877 C 33.307 41.97 32.352 41.729 31.758 41.14 C 31.167 40.55 30.827 39.656 30.742 38.45 L 30.285 31.935 C 30.2 30.732 30.41 29.798 30.912 29.133 C 31.414 28.467 32.328 28.098 33.631 28.01 C 34.934 27.918 35.873 28.163 36.484 28.748 C 37.075 29.337 37.431 30.231 37.515 31.434 L 37.617 32.845 L 34.623 33.054 L 34.578 32.412 C 34.529 31.738 34.448 31.278 34.335 31.057 C 34.222 30.841 34.052 30.736 33.846 30.752 C 33.635 30.768 33.481 30.889 33.401 31.121 C 33.32 31.354 33.303 31.807 33.352 32.496 L 33.704 37.471 C 33.753 38.145 33.833 38.606 33.947 38.827 C 34.06 39.043 34.23 39.147 34.436 39.131 C 34.647 39.115 34.801 38.995 34.878 38.762 C 34.958 38.53 34.974 38.077 34.926 37.387 C 34.89 36.89 34.861 36.473 34.821 36.136 C 34.797 35.8 34.744 35.527 34.732 35.335 C 34.683 35.114 34.655 34.922 34.61 34.777 L 37.605 34.569 C 37.605 34.569 37.661 34.693 37.702 34.822 C 37.71 34.918 37.75 35.046 37.762 35.206 C 37.775 35.367 37.803 35.559 37.823 35.816 Z M 45.107 27.404 C 45.196 28.639 44.986 29.573 44.464 30.223 C 43.942 30.872 43.048 31.241 41.761 31.329 C 40.474 31.417 39.532 31.177 38.929 30.608 C 38.322 30.038 37.982 29.14 37.897 27.905 L 40.923 27.697 C 40.931 27.793 40.968 27.889 40.976 28.002 C 40.984 28.114 41.025 28.21 41.077 28.302 C 41.117 28.399 41.186 28.455 41.271 28.515 C 41.356 28.575 41.453 28.583 41.567 28.575 C 41.68 28.567 41.773 28.527 41.85 28.475 C 41.927 28.407 41.971 28.339 42.012 28.238 C 42.036 28.138 42.064 28.042 42.072 27.93 C 42.064 27.817 42.089 27.717 42.085 27.621 Z M 43.064 41.099 L 42.712 36.108 C 42.688 35.771 42.667 35.499 42.619 35.274 C 42.57 35.049 42.526 34.893 42.469 34.769 C 42.412 34.645 42.34 34.568 42.259 34.524 C 42.174 34.48 42.093 34.472 41.979 34.48 C 41.866 34.488 41.789 34.508 41.708 34.564 C 41.631 34.617 41.571 34.705 41.534 34.833 C 41.483 35.002 41.457 35.178 41.457 35.354 C 41.441 35.583 41.461 35.856 41.486 36.192 L 41.838 41.183 L 38.844 41.392 L 38.435 35.627 C 38.35 34.44 38.56 33.506 39.062 32.841 C 39.564 32.175 40.478 31.806 41.781 31.718 C 43.084 31.626 44.039 31.867 44.634 32.456 C 45.224 33.045 45.564 33.923 45.649 35.13 L 46.058 40.895 Z M 50.876 34.636 L 51.071 34.624 L 50.342 27.044 L 53.049 26.855 L 54 40.341 L 50.52 40.582 L 48.93 32.965 L 48.736 32.977 L 49.472 40.654 L 46.765 40.842 L 45.815 27.356 L 49.294 27.116 Z"
+                        ></path>
+                    </svg>
+                </div>
+
+                <div class="landing-hero-content">
+                    <h1 class="landing-title">Welcome to [SnapSpace]</h1>
+                    <p class="landing-tagline">
+                        View, inspect and download your point clouds,<br
+                        />COLMAP data and meshes - right in your browser.
+                    </p>
+                    <a href={openViewerHref} class="btn btn-accent landing-cta">
+                        Go To Viewer
+                        <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </a>
+                    <div class="landing-links">
+                        <a
+                            href="https://www.meta.com/s/8BSi1EJ8l"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="btn landing-link-btn"
+                            title="Meta Quest App"
+                            aria-label="Meta Quest App"
+                        >
+                            <img
+                                src="/icons/meta-icon.svg"
+                                width="18"
+                                height="18"
+                                alt="Meta Quest App"
+                                class="icon-white"
+                            />
+                        </a>
+                    </div>
+                </div>
+
+                <a
+                    class="scroll-down"
+                    href="#about"
+                    aria-label="Scroll down for more"
+                >
+                    <svg
+                        class="scroll-down-icon"
+                        width="22"
+                        height="22"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.4"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
                 </a>
-            </div>
+            </section>
+
+            <section id="about" class="landing-more">
+                <span class="about-eyebrow">Meet SnapSpace</span>
+                <h2 class="landing-more-title">
+                    Digitalize your Space in minutes
+                </h2>
+                <p class="landing-more-sub">
+                    Transforms your headset into an all-in-one spatial scanner.
+                    Capture your environment and walk through the optimised
+                    point cloud in under five minutes — all without ever taking
+                    off your headset! You can also view and export your data for
+                    further use in the companion web viewer.
+                </p>
+
+                <div class="about-video">
+                    <iframe
+                        src="https://www.youtube-nocookie.com/embed/tTyBfV5ph5Q?cc_load_policy=1&cc_lang_pref=en&hl=en&rel=0"
+                        title="SnapSpace — Trailer"
+                        loading="lazy"
+                        referrerpolicy="strict-origin-when-cross-origin"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen
+                    >
+                    </iframe>
+                </div>
+
+                <h3 class="landing-subhead">Why SnapSpace?</h3>
+
+                <div class="about-blocks">
+                    <article class="about-block">
+                        <span class="about-block-icon" aria-hidden="true">
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <polyline points="12 7 12 12 15 14"></polyline>
+                            </svg>
+                        </span>
+                        <div class="about-block-text">
+                            <h4>Under 5 minutes</h4>
+                            <p>
+                                Capture and walk your point cloud without ever
+                                taking off the headset.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="about-block">
+                        <span class="about-block-icon" aria-hidden="true">
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <path
+                                    d="M17 18H7a4 4 0 0 1-.6-7.95 5.5 5.5 0 0 1 10.7-1.2A3.75 3.75 0 0 1 17 18Z"
+                                ></path>
+                            </svg>
+                        </span>
+                        <div class="about-block-text">
+                            <h4>Cloud AI pipeline</h4>
+                            <p>
+                                Heavy reconstruction runs in the cloud - no
+                                depth sensor or extra software needed.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="about-block">
+                        <span class="about-block-icon" aria-hidden="true">
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <rect x="3" y="4" width="18" height="16" rx="2"
+                                ></rect>
+                                <circle cx="8.5" cy="9.5" r="1.5"></circle>
+                                <path d="m21 16-5-5L5 20"></path>
+                            </svg>
+                        </span>
+                        <div class="about-block-text">
+                            <h4>From 5 images</h4>
+                            <p>
+                                Dense point clouds from as few as five
+                                passthrough photos.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="about-block">
+                        <span class="about-block-icon" aria-hidden="true">
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <path d="M12 3v12"></path>
+                                <polyline points="8 11 12 15 16 11"></polyline>
+                                <path d="M5 21h14"></path>
+                            </svg>
+                        </span>
+                        <div class="about-block-text">
+                            <h4>Export anywhere</h4>
+                            <p>
+                                <strong>.ply</strong>, <strong>.glb</strong> or COLMAP
+                                archives for Gaussian Splatting.
+                            </p>
+                        </div>
+                    </article>
+                </div>
+
+                <h3 class="landing-subhead">See the results:</h3>
+
+                <div class="scan-preview" id="scan-preview">
+                    <div class="scan-preview-stage" id="scan-preview-stage">
+                        <button
+                            type="button"
+                            class="btn btn-accent scan-preview-cta"
+                            id="scan-preview-load"
+                        >
+                            <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                            >
+                                <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                                <polyline points="21 3 21 9 15 9"></polyline>
+                            </svg>
+                            Load Random Scan
+                        </button>
+                        <div
+                            id="scan-preview-loading"
+                            class="scan-preview-loading hidden"
+                        >
+                            <div class="spinner-large"></div>
+                            <div
+                                id="scan-preview-progress"
+                                class="viewer-progress"
+                            >
+                                Loading…
+                            </div>
+                        </div>
+                        <div
+                            id="scan-preview-hud"
+                            class="point-size-control point-size-control--preview"
+                        >
+                            <div
+                                id="scan-preview-count"
+                                class="point-count-display"
+                            >
+                                — Points
+                            </div>
+                            <div class="point-size-inner">
+                                <label for="scan-preview-slider">Size</label>
+                                <input
+                                    id="scan-preview-slider"
+                                    type="range"
+                                    min="0.001"
+                                    max="0.05"
+                                    step="0.001"
+                                    value="0.01"
+                                    disabled
+                                />
+                            </div>
+                            <div id="scan-preview-model" class="model-display">
+                            </div>
+                        </div>
+                    </div>
+                    <p
+                        id="scan-preview-error"
+                        class="scan-preview-error hidden"
+                    >
+                    </p>
+                </div>
+
+                <div class="landing-links">
+                    <a
+                        href="https://www.meta.com/s/8BSi1EJ8l"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn landing-link-btn"
+                        title="Meta Quest App"
+                        aria-label="Meta Quest App"
+                    >
+                        <img
+                            src="/icons/meta-icon.svg"
+                            width="18"
+                            height="18"
+                            alt="Meta Quest App"
+                            class="icon-white"
+                        />
+                    </a>
+                </div>
+            </section>
+
+            <Footer />
         </div>
 
-        <a class="scroll-down" href="#about" aria-label="Scroll down for more">
-            <svg class="scroll-down-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9"/>
-            </svg>
-        </a>
-    </section>
-
-    <section id="about" class="landing-more">
-        <span class="about-eyebrow">Meet SnapSpace</span>
-        <h2 class="landing-more-title">Digitalize your Space in minutes</h2>
-        <p class="landing-more-sub">
-            Transforms your headset into an all-in-one spatial scanner. Capture your environment and walk
-            through the optimised point cloud in under five minutes — all without ever taking off your
-            headset! You can also view and export your data for further use in the companion web viewer.
-        </p>
-
-        <div class="about-video">
-            <iframe
-                src="https://www.youtube-nocookie.com/embed/tTyBfV5ph5Q?cc_load_policy=1&cc_lang_pref=en&hl=en&rel=0"
-                title="SnapSpace — Trailer"
-                loading="lazy"
-                referrerpolicy="strict-origin-when-cross-origin"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowfullscreen>
-            </iframe>
-        </div>
-
-        <h3 class="landing-subhead">Why SnapSpace?</h3>
-
-        <div class="about-blocks">
-            <article class="about-block">
-                <span class="about-block-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="9"/>
-                        <polyline points="12 7 12 12 15 14"/>
-                    </svg>
-                </span>
-                <div class="about-block-text">
-                    <h4>Under 5 minutes</h4>
-                    <p>Capture and walk your point cloud without ever taking off the headset.</p>
-                </div>
-            </article>
-            <article class="about-block">
-                <span class="about-block-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M17 18H7a4 4 0 0 1-.6-7.95 5.5 5.5 0 0 1 10.7-1.2A3.75 3.75 0 0 1 17 18Z"/>
-                    </svg>
-                </span>
-                <div class="about-block-text">
-                    <h4>Cloud AI pipeline</h4>
-                    <p>Heavy reconstruction runs in the cloud - no depth sensor or extra software needed.</p>
-                </div>
-            </article>
-            <article class="about-block">
-                <span class="about-block-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="4" width="18" height="16" rx="2"/>
-                        <circle cx="8.5" cy="9.5" r="1.5"/>
-                        <path d="m21 16-5-5L5 20"/>
-                    </svg>
-                </span>
-                <div class="about-block-text">
-                    <h4>From 5 images</h4>
-                    <p>Dense point clouds from as few as five passthrough photos.</p>
-                </div>
-            </article>
-            <article class="about-block">
-                <span class="about-block-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 3v12"/>
-                        <polyline points="8 11 12 15 16 11"/>
-                        <path d="M5 21h14"/>
-                    </svg>
-                </span>
-                <div class="about-block-text">
-                    <h4>Export anywhere</h4>
-                    <p><strong>.ply</strong>, <strong>.glb</strong> or COLMAP archives for Gaussian Splatting.</p>
-                </div>
-            </article>
-        </div>
-
-        <h3 class="landing-subhead">See it in action:</h3>
-
-        <div class="gallery" id="about-gallery" aria-roledescription="carousel" aria-label="SnapSpace screenshots">
-            <div class="gallery-viewport">
-                <div class="gallery-track" id="gallery-track">
-                    <figure class="gallery-slide">
-                        <img src="/images/1_text.webp" alt="SnapSpace screenshot 1" width="1600" height="900" loading="lazy" draggable="false"/>
-                    </figure>
-                    <figure class="gallery-slide">
-                        <img src="/images/2_text.webp" alt="SnapSpace screenshot 2" width="1600" height="900" loading="lazy" draggable="false"/>
-                    </figure>
-                    <figure class="gallery-slide">
-                        <img src="/images/3_text.webp" alt="SnapSpace screenshot 3" width="1600" height="900" loading="lazy" draggable="false"/>
-                    </figure>
-                    <figure class="gallery-slide">
-                        <img src="/images/4_text.webp" alt="SnapSpace screenshot 4" width="1600" height="900" loading="lazy" draggable="false"/>
-                    </figure>
-                </div>
-            </div>
-            <button class="gallery-arrow gallery-arrow-prev" id="gallery-prev" type="button" aria-label="Previous image">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="15 18 9 12 15 6"/>
-                </svg>
-            </button>
-            <button class="gallery-arrow gallery-arrow-next" id="gallery-next" type="button" aria-label="Next image">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="9 18 15 12 9 6"/>
-                </svg>
-            </button>
-            <div class="gallery-dots" id="gallery-dots" role="tablist" aria-label="Choose image"></div>
-        </div>
-
-        <div class="landing-links">
-            <a href="https://www.meta.com/s/8BSi1EJ8l" target="_blank" rel="noopener noreferrer" class="btn landing-link-btn" title="Meta Quest App" aria-label="Meta Quest App">
-                <img src="/icons/meta-icon.svg" width="18" height="18" alt="Meta Quest App" class="icon-white"/>
-            </a>
-        </div>
-    </section>
-
-    <Footer />
-</div>
-
-<script src="../scripts/landing-bg.ts"></script>
-<script src="../scripts/landing-gallery.ts"></script>
-
-</body>
+        <script src="../scripts/landing-bg.ts"></script>
+        <script src="../scripts/landing-preview.ts"></script>
+    </body>
 </html>
-

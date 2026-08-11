@@ -2,6 +2,9 @@
 import '../styles/global.css';
 import Footer from '../components/Footer.astro';
 import {createSupabaseServerClient} from '../lib/supabase-server';
+import {isRegistrationEnabled} from '../lib/feature-flags';
+
+const registrationEnabled = isRegistrationEnabled();
 
 const supabase = createSupabaseServerClient(
     Astro.cookies,
@@ -86,7 +89,7 @@ const mode = Astro.url.searchParams.get('mode');
             <div class="account-card">
                 <div class="auth-tabs">
                     <button class="auth-tab active" id="tab-login" type="button">Login</button>
-                    <button class="auth-tab auth-tab-disabled" id="tab-register" type="button" disabled aria-disabled="true" title="Currently for internal use only">Register</button>
+                    <button class={`auth-tab${registrationEnabled ? '' : ' auth-tab-disabled'}`} id="tab-register" type="button" disabled={!registrationEnabled} aria-disabled={!registrationEnabled} title={registrationEnabled ? undefined : 'Currently for internal use only'}>Register</button>
                 </div>
 
                 <!-- Login Form -->

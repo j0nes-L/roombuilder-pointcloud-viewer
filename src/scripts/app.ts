@@ -1,4 +1,10 @@
-import type {PointCloudInfo, PointCloudsResponse, ResolvedPointCloud} from '../lib/snapspace-client';
+import type {
+    CaptureOverviewEntry,
+    PointCloudInfo,
+    PointCloudsResponse,
+    ReconstructionInfo,
+    ResolvedPointCloud
+} from '../lib/snapspace-client';
 import {
     checkMeshAvailability,
     clearPointCloudsCache,
@@ -8,6 +14,7 @@ import {
     fetchColmapZip,
     fetchMeshGlb,
     fetchPointCloudData,
+    formatReconstructionModel,
     getCachedMeshInfo,
     resolvePointCloud
 } from '../lib/snapspace-client';
@@ -34,6 +41,7 @@ const viewerLoading = document.getElementById('viewer-loading')!;
 const viewerProgress = document.getElementById('viewer-progress')!;
 const pointSizeControl = document.getElementById('point-size-control')!;
 const pointSizeSlider = document.getElementById('point-size-slider') as HTMLInputElement;
+const modelDisplay = document.getElementById('model-display')!;
 const downloadBtn = document.getElementById('download-btn')!;
 const downloadColmapBtn = document.getElementById('download-colmap-btn')!;
 const downloadMeshBtn = document.getElementById('download-mesh-btn')!;
@@ -635,6 +643,7 @@ async function selectColmapCapture(captureId: string, info: PointCloudsResponse,
         const pictureCount = data.cameras.length;
         const colmapCountEl = document.getElementById('point-count-display');
         if (colmapCountEl) colmapCountEl.textContent = `${pictureCount.toLocaleString('de-DE')} Images`;
+        setModelDisplay(null);
         pointSizeControl.classList.add('count-only');
         pointSizeControl.classList.remove('hidden');
         showToast('COLMAP cameras loaded.', 'success');
@@ -741,6 +750,7 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
                 pointSizeControl.classList.add('hidden');
                 const pcd = document.getElementById('point-count-display');
                 if (pcd) pcd.textContent = '';
+                setModelDisplay(null);
             } else {
                 unloadColmapCameras();
                 clearColmapImageCache();
@@ -750,6 +760,7 @@ async function performDeleteCapture(captureId: string, viewFilename: string, lis
                 pointSizeControl.classList.remove('count-only');
                 const pcd = document.getElementById('point-count-display');
                 if (pcd) pcd.textContent = '';
+                setModelDisplay(null);
             }
             setStatus('');
         }
@@ -858,6 +869,8 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
         const pointCountEl = document.getElementById('point-count-display');
         if (pointCountEl) pointCountEl.textContent = countStr;
 
+        setModelDisplay(resolved.reconstruction);
+
         pointSizeSlider.min = '0.001';
         pointSizeSlider.max = '0.05';
         pointSizeSlider.step = '0.001';
@@ -878,6 +891,17 @@ async function selectPointCloud(captureId: string, resolved: ResolvedPointCloud,
             setDownloadBusy(false);
         }
     }
+}
+
+function setModelDisplay(rec: ReconstructionInfo | null | undefined): void {
+    const label = formatReconstructionModel(rec);
+    modelDisplay.textContent = label ?? '';
+    const details = [
+        rec?.checkpoint,
+        rec?.backfilled ? 'labelled retroactively' : null,
+    ].filter(Boolean).join(' · ');
+    if (label && details) modelDisplay.title = details;
+    else modelDisplay.removeAttribute('title');
 }
 
 function setStatus(_msg: string): void {}

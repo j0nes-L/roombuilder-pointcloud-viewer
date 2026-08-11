@@ -306,6 +306,24 @@ export async function loadPointCloudFromBuffer(
     onProgress?.('Point cloud loaded');
 }
 
+export function dollyCamera(factor: number): void {
+    if (!camera || !controls) return;
+    const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+    camera.position.copy(controls.target).addScaledVector(dir, factor);
+    controls.update();
+    controls.saveState();
+}
+
+export function showEmptyGrid(radius = 4): void {
+    updateGrid(radius);
+    camera.near = radius * 0.001;
+    camera.far = radius * 100;
+    camera.updateProjectionMatrix();
+    controls.target.set(0, radius * 0.15, 0);
+    camera.position.set(radius * 0.6, radius * 0.5, radius * 1.6);
+    controls.update();
+    controls.saveState();
+}
 
 function updateGrid(radius: number): void {
     if (gridMesh) {

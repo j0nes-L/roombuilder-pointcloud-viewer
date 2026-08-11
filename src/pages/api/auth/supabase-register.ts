@@ -1,11 +1,10 @@
 import type {APIRoute} from 'astro';
 import {createSupabaseServerClientFromRequest} from '../../../lib/supabase-server';
 import {getOrigin} from '../../../lib/get-origin';
-
-const REGISTRATION_ENABLED = false;
+import {isRegistrationEnabled} from '../../../lib/feature-flags';
 
 export const POST: APIRoute = async ({request}) => {
-    if (!REGISTRATION_ENABLED) {
+    if (!isRegistrationEnabled()) {
         return new Response(JSON.stringify({error: 'Currently for internal use only.'}), {
             status: 403,
             headers: {'Content-Type': 'application/json'},

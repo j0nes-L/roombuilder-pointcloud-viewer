@@ -170,8 +170,21 @@ SNAPSPACE_ADMIN_PASSWORD=leckeier
 SNAPSPACE_PASSWORD=1234
 
 # upstream api key
-SNAPSPACE_API_KEY="aPeXlMZmNpy3svsHUSTFS8VFo_8XilxL76-EAlyVhoeficdmVYA3WMiU9R9xf7u3"
+SNAPSPACE_API_KEY="<your-api-key>"
+
+# feature flags
+ENABLE_REGISTER=false
 ```
+
+### Feature flags
+
+| Variable | Values | Effect |
+|---|---|---|
+| `ENABLE_REGISTER` | `true` / anything else | `true` enables public sign-up: the **Register** tab on `/account` becomes clickable and `POST /api/auth/supabase-register` accepts requests. Unset or any other value keeps registration closed (tab disabled, API returns `403`). |
+
+Read via `isRegistrationEnabled()` in `src/lib/feature-flags.ts`, which checks
+`process.env` first, so flipping the value in the Vercel dashboard takes effect
+on the next request without a rebuild.
 
 Rules:
 

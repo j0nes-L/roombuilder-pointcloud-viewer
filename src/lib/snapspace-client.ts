@@ -18,6 +18,14 @@ export interface PointCloudInfo {
     url: string;
 }
 
+export interface ReconstructionInfo {
+    model?: string | null;
+    checkpoint?: string | null;
+    points?: number | null;
+    completed_at?: string | null;
+    backfilled?: boolean;
+}
+
 export interface PointCloudsResponse {
     capture_id: string;
     pointclouds: PointCloudInfo[];
@@ -26,6 +34,7 @@ export interface PointCloudsResponse {
     isColmap?: boolean;
     colmap_url?: string | null;
     colmap_size_bytes?: number | null;
+    reconstruction?: ReconstructionInfo | null;
 }
 
 export interface ResolvedPointCloud {
@@ -36,6 +45,18 @@ export interface ResolvedPointCloud {
     colmap_size_bytes: number | null;
     mesh_available: boolean;
     mesh_size_bytes: number | null;
+    reconstruction: ReconstructionInfo | null;
+}
+
+const MODEL_LABELS: Record<string, string> = {
+    'depth-anything': 'Depth Anything 3',
+    'vggt': 'VGGT',
+};
+
+export function formatReconstructionModel(rec: ReconstructionInfo | null | undefined): string | null {
+    const model = rec?.model;
+    if (!model) return null;
+    return MODEL_LABELS[model] ?? model;
 }
 
 export function resolvePointCloud(resp: PointCloudsResponse): ResolvedPointCloud | null {
@@ -49,6 +70,7 @@ export function resolvePointCloud(resp: PointCloudsResponse): ResolvedPointCloud
         colmap_size_bytes: resp.colmap_size_bytes || null,
         mesh_available: false,
         mesh_size_bytes: null,
+        reconstruction: resp.reconstruction ?? null,
     };
 }
 
@@ -119,17 +141,12 @@ async function fetchCaptureFile(
     onProgress?: (fraction: number) => void,
     knownTotalBytes?: number | null,
 ): Promise<ArrayBuffer> {
-    // Prefer the direct share URL: bytes stream straight from the API to the
-    // browser, so no Vercel origin transfer is consumed. Falls back to the
-    // proxy stream only if the share link is unavailable (e.g. the server-side
-    // /share bug). Once /share is fixed server-side, this path costs ~0 egress.
     const directUrl = await getDirectDownloadUrl(captureId, filename);
     if (directUrl) {
         try {
             const res = await fetch(directUrl);
             if (res.ok) return streamResponse(res, onProgress, knownTotalBytes);
         } catch {
-            // fall through to proxy
         }
     }
 
