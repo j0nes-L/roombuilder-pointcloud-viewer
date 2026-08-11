@@ -51,6 +51,8 @@ export interface ResolvedPointCloud {
 const MODEL_LABELS: Record<string, string> = {
     'depth-anything': 'Depth Anything 3',
     'vggt': 'VGGT',
+    'mast3r': 'MASt3R',
+    'dust3r': 'DUSt3R',
 };
 
 export function formatReconstructionModel(rec: ReconstructionInfo | null | undefined): string | null {

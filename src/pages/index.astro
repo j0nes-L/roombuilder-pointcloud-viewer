@@ -321,6 +321,26 @@ const openViewerHref = user
                                 Loading…
                             </div>
                         </div>
+                        <button
+                            type="button"
+                            id="scan-preview-next"
+                            class="scan-preview-next hidden"
+                        >
+                            <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                            >
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                            Next Scan
+                        </button>
                         <div
                             id="scan-preview-hud"
                             class="point-size-control point-size-control--preview"
@@ -339,7 +359,7 @@ const openViewerHref = user
                                     min="0.001"
                                     max="0.05"
                                     step="0.001"
-                                    value="0.01"
+                                    value="0.016"
                                     disabled
                                 />
                             </div>
@@ -353,6 +373,12 @@ const openViewerHref = user
                     >
                     </p>
                 </div>
+
+                <p class="landing-more-sub scan-preview-note">
+                    Please note that this is a downscaled preview - 300,000
+                    points instead of the several million of the original scan.
+                    Use the viewer for the full resolution.
+                </p>
 
                 <div class="landing-links">
                     <a

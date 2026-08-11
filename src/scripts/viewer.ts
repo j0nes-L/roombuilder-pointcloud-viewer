@@ -42,6 +42,7 @@ const clock = new THREE.Clock();
 let rightMouseDown = false;
 let gridMesh: THREE.Mesh | null = null;
 
+let interactionEnabled = true;
 let colmapGroup: THREE.Group | null = null;
 let colmapCamObjects: ColmapCamObject[] = [];
 let colmapHoverCb: ((data: ColmapCameraData | null, x: number, y: number, pos?: THREE.Vector3, quat?: THREE.Quaternion) => void) | null = null;
@@ -122,7 +123,7 @@ export function initViewer(containerEl: HTMLElement): void {
         const key = e.key.toLowerCase();
         flyKeys[key] = true;
         if (key === 'shift') flySpeed = FLY_SPEED_BASE * 3;
-        if (FLY_KEYS.has(key) && rightMouseDown && !flyMode) {
+        if (FLY_KEYS.has(key) && rightMouseDown && !flyMode && interactionEnabled) {
             enterFlyMode();
         }
     });
@@ -306,10 +307,29 @@ export async function loadPointCloudFromBuffer(
     onProgress?.('Point cloud loaded');
 }
 
+export function setInteractionEnabled(enabled: boolean): void {
+    interactionEnabled = enabled;
+    if (flyMode && !enabled) exitFlyMode();
+    if (controls) controls.enabled = enabled;
+}
+
 export function dollyCamera(factor: number): void {
     if (!camera || !controls) return;
     const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
     camera.position.copy(controls.target).addScaledVector(dir, factor);
+    controls.update();
+    controls.saveState();
+}
+
+export function setMinCameraElevation(degrees: number): void {
+    if (!camera || !controls) return;
+    const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    const maxPhi = THREE.MathUtils.degToRad(90 - degrees);
+    if (spherical.phi <= maxPhi) return;
+    spherical.phi = maxPhi;
+    offset.setFromSpherical(spherical);
+    camera.position.copy(controls.target).add(offset);
     controls.update();
     controls.saveState();
 }
@@ -337,6 +357,10 @@ function updateGrid(radius: number): void {
     const gridMat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
+        // The cloud's floor is shifted onto y = 0, so grid and floor points are
+        // coplanar and z-fight while orbiting. Drawing the grid first without a
+        // depth test puts it behind every point for good.
+        depthTest: false,
         side: THREE.DoubleSide,
         uniforms: {
             uScale: {value: gridScale},
