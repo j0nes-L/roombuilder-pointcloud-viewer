@@ -28,8 +28,6 @@ if (section && stage && loadBtn && loadingEl && progressEl && countEl && modelEl
     let viewerPromise: Promise<ViewerModule> | null = null;
     let busy = false;
 
-    // three.js is pulled in only once the preview scrolls close to the
-    // viewport, so a visitor who never reaches this section pays nothing.
     function ensureViewer(): Promise<ViewerModule> {
         if (!viewerPromise) {
             viewerPromise = import('./viewer').then((viewer) => {
