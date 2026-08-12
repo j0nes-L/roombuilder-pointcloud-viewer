@@ -21,6 +21,7 @@ const DEFAULT_POINT_SIZE = 0.005;
 const BACKGROUND_COLOR = 0x111111;
 
 let scene: THREE.Scene;
+let gridScene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
 let controls: OrbitControls;
@@ -63,7 +64,7 @@ export function initViewer(containerEl: HTMLElement): void {
     container = containerEl;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(BACKGROUND_COLOR);
+    gridScene = new THREE.Scene();
 
     camera = new THREE.PerspectiveCamera(
         75,
@@ -79,6 +80,8 @@ export function initViewer(containerEl: HTMLElement): void {
     });
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    renderer.setClearColor(BACKGROUND_COLOR, 1);
+    renderer.autoClear = false;
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     container.appendChild(renderer.domElement);
@@ -190,7 +193,7 @@ export function unloadPointCloud(): void {
         currentPoints = null;
     }
     if (gridMesh) {
-        scene.remove(gridMesh);
+        gridScene.remove(gridMesh);
         gridMesh.geometry.dispose();
         (gridMesh.material as THREE.Material).dispose();
         gridMesh = null;
@@ -287,7 +290,7 @@ export async function loadPointCloudFromBuffer(
         flySpeed = radius * 0.5;
         updateGrid(radius);
 
-        camera.near = radius * 0.00001;
+        camera.near = radius * 0.001;
         camera.far = radius * 100;
         camera.updateProjectionMatrix();
 
@@ -347,7 +350,7 @@ export function showEmptyGrid(radius = 4): void {
 
 function updateGrid(radius: number): void {
     if (gridMesh) {
-        scene.remove(gridMesh);
+        gridScene.remove(gridMesh);
         gridMesh.geometry.dispose();
         (gridMesh.material as THREE.Material).dispose();
         gridMesh = null;
@@ -357,9 +360,6 @@ function updateGrid(radius: number): void {
     const gridMat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        // The cloud's floor is shifted onto y = 0, so grid and floor points are
-        // coplanar and z-fight while orbiting. Drawing the grid first without a
-        // depth test puts it behind every point for good.
         depthTest: false,
         side: THREE.DoubleSide,
         uniforms: {
@@ -377,27 +377,29 @@ function updateGrid(radius: number): void {
       varying vec3 vWorldPos;
       void main() {
         vec2 coord = vWorldPos.xz / uScale;
-        vec2 grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
+        vec2 width = fwidth(coord);
+        vec2 grid = abs(fract(coord - 0.5) - 0.5) / max(width, vec2(1e-6));
         float line = min(grid.x, grid.y);
         float alpha = 1.0 - min(line, 1.0);
 
-        float dist = length(vWorldPos.xz);
-        float fade = 1.0 - smoothstep(uScale * 3.0, uScale * 8.0, dist);
+        alpha *= 1.0 - smoothstep(0.2, 0.6, max(width.x, width.y));
 
-        alpha *= fade * 0.25;
-        if (alpha < 0.005) discard;
+        float dist = length(vWorldPos.xz);
+        alpha *= 1.0 - smoothstep(uScale * 3.0, uScale * 8.0, dist);
+
+        alpha *= 0.25;
+        if (alpha < 0.002) discard;
         gl_FragColor = vec4(vec3(0.4), alpha);
       }
     `,
     });
 
-    const planeSize = radius * 200;
+    const planeSize = radius * 20;
     const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
     planeGeo.rotateX(-Math.PI / 2);
     gridMesh = new THREE.Mesh(planeGeo, gridMat);
     gridMesh.position.y = 0;
-    gridMesh.renderOrder = -1;
-    scene.add(gridMesh);
+    gridScene.add(gridMesh);
 }
 
 function onResize(): void {
@@ -432,10 +434,13 @@ function animate(): void {
         controls.update();
     }
 
+    renderer.clear();
+    if (gridMesh) {
+        renderer.render(gridScene, camera);
+        renderer.clearDepth();
+    }
     renderer.render(scene, camera);
 }
-
-
 
 
 let camGlbTemplate: THREE.Object3D | null = null;
