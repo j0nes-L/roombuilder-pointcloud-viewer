@@ -1,66 +1,397 @@
 ---
-import '../styles/global.css';
+import "../styles/global.css";
 ---
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SnapSpace · Privacy Policy</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
-    <style>html, body { overflow: auto !important; height: auto !important; }</style>
-</head>
-<body class="privacy-page">
-<div class="privacy-container">
-    <header class="privacy-header">
-        <a href="/" class="privacy-back">← Back</a>
-        <h1>Privacy Policy</h1>
-    </header>
-    <main class="privacy-content">
-        <h2>1. How We Handle Your Data</h2>
-        <p>When you use SnapSpace on your Meta Quest headset, we collect and process the following data to provide the application's core functionality:</p>
-        <ul>
-            <li><strong>Raw Sensor Data:</strong> Spatial and camera frame data captured by your headset's sensors to map your physical environment.</li>
-            <li><strong>Point Cloud Data:</strong> 3D spatial representations (scans) of the specific spaces you choose to capture within the app.</li>
-            <li><strong>Web Viewer Synchronization:</strong> All point clouds generated via the headset are automatically synced to our companion web viewer. During the test phase, these scans as well as the sensor data are visible to anyone visiting this site.</li>
-        </ul>
-        <p>We kindly ask that you do not scan highly private or sensitive spaces. Try to only share spaces you feel comfortable sharing.</p>
 
-        <h2>2. Data Deletion and Your Privacy Rights</h2>
-        <p>You have the right to access, correct, or request the deletion of your personal data and spatial scans at any time. We provide this deletion process for all users, irrespective of their region, and we do not charge any fees for fulfilling data deletion requests.</p>
-        <p>If you request the deletion of your data, we will promptly remove your specific point cloud scans from the web viewer and securely delete the associated raw sensor data from our servers. We will fulfill all deletion requests unless we are strictly required by law to retain specific data.</p>
-
-        <h2>3. Contact Information</h2>
-        <p>If you have any questions, privacy concerns, or wish to formally request the deletion of your data, please contact me directly via: <a id="contact-mail" href="#" class="footer-link"></a>.</p>
-    </main>
-    <footer class="app-footer">
-        <span>&copy; <a href="https://jonasludorf.dev" target="_blank" rel="noopener noreferrer" class="footer-link">Jonas Ludorf</a></span>
-        <span class="footer-sep">|</span>
-        <a href="https://jonasludorf.dev/legal/" class="footer-link">Legal Note</a>
-    </footer>
-</div>
-<script>
-    const u = 'contact';
-    const d = 'snapspace.cloud';
-    const el = document.getElementById('contact-mail');
-    if (el instanceof HTMLAnchorElement) {
-        el.href = 'mailto:' + u + '@' + d;
-        el.textContent = u + '@' + d;
-    }
-
-    // Back-Button: zur vorherigen internen Seite (Startseite oder Viewer) zurückführen
-    const backLink = document.querySelector('.privacy-back');
-    if (backLink) {
-        try {
-            const ref = document.referrer ? new URL(document.referrer) : null;
-            if (ref && ref.origin === location.origin) {
-                const path = ref.pathname.replace(/\/+$/, '') || '/';
-                if (path === '/viewer') backLink.setAttribute('href', '/viewer');
-                else if (path === '/') backLink.setAttribute('href', '/');
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SnapSpace · Privacy Policy</title>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <style>
+            html,
+            body {
+                overflow: auto !important;
+                height: auto !important;
             }
-        } catch {}
-    }
-</script>
-</body>
-</html>
+        </style>
+    </head>
+    <body class="privacy-page">
+        <div class="privacy-container">
+            <header class="privacy-header">
+                <a href="/" class="privacy-back">← Back</a>
+                <h1>Privacy Policy</h1>
+            </header>
+            <main class="privacy-content">
+                <p class="privacy-updated">Last updated: 14 August 2026</p>
 
+                <h2>1. Controller</h2>
+                <p>
+                    The controller responsible for data processing within the
+                    meaning of the EU General Data Protection Regulation
+                    (Datenschutz-Grundverordnung, DSGVO) is:
+                </p>
+                <p>
+                    Jonas Ludorf · Email: <a
+                        class="contact-mail footer-link"
+                        href="#"></a>
+                </p>
+                <p>
+                    No data protection officer has been appointed, as the legal
+                    requirements for a mandatory appointment are not met.
+                </p>
+
+                <h2>2. What Data We Process</h2>
+                <p>
+                    When you use SnapSpace on your Meta Quest headset and in
+                    this web viewer, the following data is processed:
+                </p>
+                <ul>
+                    <li>
+                        <strong>Raw Sensor Data:</strong> Spatial and camera frame
+                        data captured by your headset's sensors to map your physical
+                        environment. Camera frames may show your surroundings and,
+                        if present, other people.
+                    </li>
+                    <li>
+                        <strong>Point Cloud &amp; Mesh Data:</strong> 3D spatial representations
+                        (scans) of the specific spaces you choose to capture within
+                        the app, including derived data such as camera poses and reconstructed
+                        meshes.
+                    </li>
+                    <li>
+                        <strong>Account Data:</strong> If you create an account: your
+                        email address, a display name you choose, a securely hashed
+                        password, your account role and the creation timestamp.
+                    </li>
+                    <li>
+                        <strong>Sharing Data:</strong> Which captures belong to or
+                        have been shared with your account, and share links you create.
+                    </li>
+                    <li>
+                        <strong>Server Log Data:</strong> Each request to this website
+                        is logged by our hosting providers for operational and security
+                        purposes. This includes your IP address, date and time, the
+                        requested URL, HTTP status, referrer and browser/user agent
+                        string.
+                    </li>
+                </ul>
+                <p>
+                    We kindly ask that you do not scan highly private or
+                    sensitive spaces, and that you do not scan other people
+                    without their knowledge and agreement. Try to only share
+                    spaces you feel comfortable sharing.
+                </p>
+
+                <h2>3. Purposes and Legal Bases</h2>
+                <ul>
+                    <li>
+                        <strong>Providing the app and web viewer</strong> (capturing,
+                        processing, storing and displaying your scans; account management;
+                        login; sharing) — Art. 6(1)(b) DSGVO (performance of a contract
+                        / pre-contractual measures).
+                    </li>
+                    <li>
+                        <strong>Transactional emails</strong> such as account confirmation
+                        and password reset — Art. 6(1)(b) DSGVO.
+                    </li>
+                    <li>
+                        <strong
+                            >Server logs, IT security, abuse and error
+                            detection, stability</strong
+                        > — Art. 6(1)(f) DSGVO (legitimate interest in operating a
+                        secure and functional service).
+                    </li>
+                    <li>
+                        <strong
+                            >Public display of scans during the test phase</strong
+                        > — Art. 6(1)(a) DSGVO (consent), which you give by choosing
+                        to upload a scan while this notice is in effect. You can withdraw
+                        this at any time by requesting deletion (see section 8); withdrawal
+                        does not affect the lawfulness of processing carried out before
+                        the withdrawal.
+                    </li>
+                </ul>
+                <p>
+                    Providing account and scan data is not legally required, but
+                    without it the app cannot be used. We do not carry out
+                    automated decision-making or profiling within the meaning of
+                    Art. 22 DSGVO.
+                </p>
+
+                <h2>4. Public Visibility During the Test Phase</h2>
+                <p>
+                    All point clouds generated via the headset are automatically
+                    synced to this companion web viewer. During the test phase,
+                    these scans as well as the associated sensor data may be
+                    visible to anyone visiting this site. Please treat
+                    everything you upload as potentially public.
+                </p>
+
+                <h2>5. Cookies and Local Storage</h2>
+                <p>
+                    This website does not use advertising cookies, analytics, or
+                    any third-party tracking technologies. We do not embed
+                    social media plugins, fonts loaded from external servers, or
+                    advertising networks.
+                </p>
+                <p>
+                    We only use storage that is strictly necessary to provide
+                    the service you requested (§ 25(2) no. 2 TDDDG / ePrivacy
+                    exemption), which is why no cookie consent banner is shown:
+                </p>
+                <ul>
+                    <li>
+                        <strong>Authentication cookies</strong> (set by Supabase,
+                        names beginning with <code>sb-</code>): keep you logged
+                        in and protect your session. They are only set once you
+                        log in and are removed when you log out.
+                    </li>
+                    <li>
+                        <strong>Session storage</strong> (<code
+                            >ss_pending_confirm_email</code
+                        >): temporarily remembers the email address you just
+                        registered with, so the confirmation page can show it.
+                        It is stored in your browser only and cleared when you
+                        close the tab.
+                    </li>
+                </ul>
+
+                <h2>6. Hosting, Processors and Third-Party Services</h2>
+                <p>
+                    We do not sell your data and we do not share it with third
+                    parties for their own purposes. We do, however, rely on the
+                    following service providers, who process data on our behalf
+                    under data processing agreements pursuant to Art. 28 DSGVO:
+                </p>
+                <ul>
+                    <li>
+                        <strong>Vercel Inc.</strong> (340 S Lemon Ave #4133, Walnut,
+                        CA 91789, USA) — hosting and delivery of this website and
+                        its serverless functions. For security and operational purposes,
+                        technical data such as IP addresses, request metadata and
+                        browser information is processed by Vercel. Vercel is based
+                        in the USA; transfers are safeguarded by EU Standard Contractual
+                        Clauses and Vercel's certification under the EU–U.S. Data
+                        Privacy Framework. See the <a
+                            href="https://vercel.com/legal/privacy-policy"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="footer-link">Vercel Privacy Policy</a
+                        >.
+                    </li>
+                    <li>
+                        <strong>Cloudflare, Inc.</strong> (101 Townsend St., San Francisco,
+                        CA 94107, USA) — authoritative DNS for the domain <code
+                            >snapspace.cloud</code
+                        >. When your device looks up our domain, Cloudflare
+                        processes the DNS query and the IP address of the
+                        resolver making it. Our DNS records are <strong
+                            >not</strong
+                        > proxied through Cloudflare, so Cloudflare does not receive,
+                        terminate or inspect the content of your requests to this
+                        website. Transfers to the USA are safeguarded by EU Standard
+                        Contractual Clauses. See the <a
+                            href="https://www.cloudflare.com/privacypolicy/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="footer-link">Cloudflare Privacy Policy</a
+                        >.
+                    </li>
+                    <li>
+                        <strong>Supabase Inc.</strong> (970 Toa Payoh North, Singapore
+                        / Supabase Pte. Ltd.) — authentication, account database and
+                        transactional emails. Our Supabase project is hosted in the
+                        EU (Frankfurt/Ireland region). See the <a
+                            href="https://supabase.com/privacy"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="footer-link">Supabase Privacy Policy</a
+                        >.
+                    </li>
+                    <li>
+                        <strong>STRATO GmbH</strong> (Otto-Ostrowski-Straße 7, 10249
+                        Berlin, Germany) — the server that receives, processes and
+                        stores your scans and raw sensor data (<code
+                            >api.snapspace.cloud</code
+                        >). Data is stored on servers located in Germany. See
+                        the <a
+                            href="https://www.strato.de/datenschutz/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="footer-link">STRATO Privacy Policy</a
+                        >.
+                    </li>
+                </ul>
+                <p>
+                    This website is built with <a
+                        href="https://astro.build/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="footer-link">Astro</a
+                    >, an open-source framework. Astro runs on our own
+                    infrastructure and does not itself collect or transmit any
+                    data about you.
+                </p>
+                <p>
+                    Please note that the SnapSpace headset app runs on Meta
+                    Quest hardware. Your use of the headset and the Meta
+                    platform is additionally subject to the <a
+                        href="https://www.meta.com/legal/privacy-policy/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="footer-link">Meta Privacy Policy</a
+                    >, over which we have no control.
+                </p>
+
+                <h2>7. Retention Periods</h2>
+                <ul>
+                    <li>
+                        <strong>Scans, raw sensor data and derived data:</strong
+                        > stored until you request their deletion or your account
+                        is deleted.
+                    </li>
+                    <li>
+                        <strong>Account data:</strong> stored for as long as your
+                        account exists; deleted after an account deletion request.
+                    </li>
+                    <li>
+                        <strong>Server log data:</strong> retained only as long as
+                        necessary for security and troubleshooting, and deleted or
+                        anonymised thereafter in accordance with our providers' retention
+                        policies.
+                    </li>
+                </ul>
+                <p>
+                    Longer retention only occurs where we are legally required
+                    to keep specific data.
+                </p>
+
+                <h2>8. Your Rights</h2>
+                <p>Under the DSGVO you have the right to:</p>
+                <ul>
+                    <li>
+                        request <strong>access</strong> to the personal data we hold
+                        about you (Art. 15);
+                    </li>
+                    <li>
+                        request <strong>rectification</strong> of inaccurate data
+                        (Art. 16);
+                    </li>
+                    <li>
+                        request <strong>erasure</strong> of your data (Art. 17);
+                    </li>
+                    <li>
+                        request <strong>restriction</strong> of processing (Art. 18);
+                    </li>
+                    <li>
+                        receive your data in a portable format (<strong
+                            >data portability</strong
+                        >, Art. 20);
+                    </li>
+                    <li>
+                        <strong>object</strong> to processing based on legitimate
+                        interests (Art. 21);
+                    </li>
+                    <li>
+                        <strong>withdraw consent</strong> at any time with effect
+                        for the future (Art. 7(3)).
+                    </li>
+                </ul>
+                <p>
+                    We provide this process for all users, irrespective of their
+                    region, and we do not charge any fees for fulfilling data
+                    deletion requests. If you request the deletion of your data,
+                    we will promptly remove your specific point cloud scans from
+                    the web viewer and securely delete the associated raw sensor
+                    data from our servers. We will fulfil all deletion requests
+                    unless we are strictly required by law to retain specific
+                    data.
+                </p>
+                <p>
+                    You also have the right to lodge a complaint with a data
+                    protection supervisory authority, in particular in the EU
+                    member state of your habitual residence, place of work, or
+                    the place of the alleged infringement (Art. 77 DSGVO).
+                </p>
+
+                <h2>9. Data Security</h2>
+                <p>
+                    All traffic to this website and to our API is encrypted via
+                    HTTPS/TLS. Passwords are never stored in plain text. Access
+                    to scans and account data is protected by row-level security
+                    rules and short-lived signed URLs, and credentials for our
+                    backend API are only ever used server-side and never exposed
+                    to your browser.
+                </p>
+
+                <h2>10. Children</h2>
+                <p>
+                    SnapSpace is not directed at children under the age of 16.
+                    If you become aware that a child has provided us with
+                    personal data, please contact us and we will delete it.
+                </p>
+
+                <h2>11. Changes to This Policy</h2>
+                <p>
+                    As SnapSpace is under active development, we may update this
+                    privacy policy to reflect changes to the service or to legal
+                    requirements. The current version always applies, and the
+                    date at the top of this page indicates when it was last
+                    revised.
+                </p>
+
+                <h2>12. Contact</h2>
+                <p>
+                    If you have any questions, privacy concerns, or wish to
+                    formally request access to or deletion of your data, please
+                    contact me directly via: <a
+                        id="contact-mail"
+                        class="contact-mail footer-link"
+                        href="#"></a>.
+                </p>
+            </main>
+            <footer class="app-footer">
+                <span
+                    >&copy; <a
+                        href="https://jonasludorf.dev"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="footer-link">Jonas Ludorf</a
+                    ></span
+                >
+                <span class="footer-sep">|</span>
+                <a href="https://jonasludorf.dev/legal/" class="footer-link"
+                    >Legal Note</a
+                >
+            </footer>
+        </div>
+        <script>
+            const u = "contact";
+            const d = "snapspace.cloud";
+            document.querySelectorAll(".contact-mail").forEach((el) => {
+                if (el instanceof HTMLAnchorElement) {
+                    el.href = "mailto:" + u + "@" + d;
+                    el.textContent = u + "@" + d;
+                }
+            });
+
+            const backLink = document.querySelector(".privacy-back");
+            if (backLink) {
+                try {
+                    const ref = document.referrer
+                        ? new URL(document.referrer)
+                        : null;
+                    if (ref && ref.origin === location.origin) {
+                        const path = ref.pathname.replace(/\/+$/, "") || "/";
+                        if (path === "/viewer")
+                            backLink.setAttribute("href", "/viewer");
+                        else if (path === "/")
+                            backLink.setAttribute("href", "/");
+                    }
+                } catch {}
+            }
+        </script>
+    </body>
+</html>

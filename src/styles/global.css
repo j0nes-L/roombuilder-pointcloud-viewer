@@ -1353,6 +1353,22 @@ body.privacy-page {
     font-weight: 600;
 }
 
+.privacy-content code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.privacy-updated {
+    font-size: 12px !important;
+    color: var(--text-muted);
+    margin-bottom: -4px;
+}
+
 .privacy-container .app-footer {
     width: 100%;
     margin-top: auto;
